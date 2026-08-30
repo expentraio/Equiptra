@@ -23,7 +23,7 @@ func (a *API) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	err := a.DB.QueryRow(r.Context(),
-		`SELECT id, name, email, role, password_hash FROM users WHERE email = $1`,
+		`SELECT id, name, email, role, password_hash FROM users WHERE lower(email) = lower($1)`,
 		req.Email,
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.PasswordHash)
 	if err != nil {
