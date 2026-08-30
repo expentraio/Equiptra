@@ -7,9 +7,27 @@ core of the data model.
 
 ## Stack
 
-- Backend: Go (`backend/`), Postgres, chi router, pgx
-- Frontend: React + TypeScript + Tailwind v4 (`frontend/`), Vite
-- Auth: email/password, JWT session cookie, `admin`/`standard` roles
+- Backend: Go (`backend/`), Postgres, chi router, pgx — deploying to Render
+- Frontend: React + TypeScript + Tailwind v4 (`frontend/`), Vite — deploying to Vercel
+- Database: Supabase-hosted Postgres (was local-only during initial build)
+- File storage: Supabase Storage (S3-compatible) for product photos
+- Auth: email/password, JWT session cookie, `admin`/`standard` roles — unchanged by the hosting move
+
+## Deployment (Vercel + Render + Supabase)
+
+- **`render.yaml`** (repo root) — Render blueprint for the Go API. Builds
+  `./cmd/api` from `backend/`. Render injects `PORT` automatically; the app
+  now reads it (falls back to `LISTEN_ADDR`, then `:8080` — see
+  `cmd/api/main.go`). Env vars marked `sync: false` need real values set in
+  the Render dashboard (or via `render.yaml` before first deploy) — none are
+  committed here.
+- **`frontend/vercel.json`** — rewrites `/api/:path*` to the Render backend
+  URL so the browser only ever talks to the Vercel origin. This keeps the
+  JWT cookie first-party (no `SameSite=None` needed, no CORS changes) —
+  chosen specifically so the existing auth setup didn't need touching.
+  **Placeholder URL inside — update once the backend's Render URL exists.**
+- `JWT_SECRET` for production was generated and handed to you out-of-band
+  (not committed anywhere in this repo) — set it in Render's dashboard.
 
 ## Local setup
 

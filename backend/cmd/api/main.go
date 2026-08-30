@@ -126,9 +126,16 @@ func main() {
 		})
 	})
 
+	// Render, Fly, and most PaaS platforms inject PORT and require the app
+	// to bind to it; LISTEN_ADDR (full host:port) still wins if set, for
+	// local dev / anywhere PORT isn't the convention.
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
-		addr = ":8080"
+		if port := os.Getenv("PORT"); port != "" {
+			addr = ":" + port
+		} else {
+			addr = ":8080"
+		}
 	}
 	log.Printf("equiptra api listening on %s", addr)
 	if err := http.ListenAndServe(addr, r); err != nil {
