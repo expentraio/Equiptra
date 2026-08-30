@@ -69,10 +69,13 @@ func main() {
 			r.Get("/", api.ListProducts)
 			r.Get("/{id}", api.GetProduct)
 			r.Get("/{id}/assets", api.ListProductAssets)
+			// Create/edit intentionally open to any authenticated user for now
+			// (admin vs standard permissions still TBD — see README). Delete and
+			// photo upload stay admin-gated since they weren't part of that ask.
+			r.Post("/", api.CreateProduct)
+			r.Put("/{id}", api.UpdateProduct)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAdmin)
-				r.Post("/", api.CreateProduct)
-				r.Put("/{id}", api.UpdateProduct)
 				r.Delete("/{id}", api.DeleteProduct)
 				r.Post("/{id}/photo/presign", api.PresignProductPhoto)
 			})
@@ -82,10 +85,12 @@ func main() {
 			r.Get("/", api.ListAssets)
 			r.Get("/{id}", api.GetAsset)
 			r.Get("/{id}/history", api.GetAssetHistory)
+			// Same as products above: create/edit open to any authenticated user
+			// for now; delete stays admin-gated.
+			r.Post("/", api.CreateAsset)
+			r.Put("/{id}", api.UpdateAsset)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAdmin)
-				r.Post("/", api.CreateAsset)
-				r.Put("/{id}", api.UpdateAsset)
 				r.Delete("/{id}", api.DeleteAsset)
 			})
 		})

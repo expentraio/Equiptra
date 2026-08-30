@@ -167,3 +167,12 @@ next to every thumbnail, so a per-category icon would be redundant).
   worth a sign-off pass against a real delivery note before first live use.
 - **Quoting/pricing** — explicitly out of scope for v1 per the brief.
 - Backup/retention policy for Postgres — not configured (local dev only so far).
+- **Role-based permissions are deliberately loose right now.** Creating and
+  editing products/assets is open to any authenticated user (`admin` or
+  `standard`) — not gated the way the brief's `admin`/`standard` split
+  originally implied ("admin can edit values... standard can book/check
+  assets in-out"). `DELETE` on products/assets is still admin-only; nothing
+  else changed. This was a deliberate, explicit decision to defer proper
+  permission design until the app's been used enough to know where the
+  real lines should be — revisit once that's clearer, don't treat the
+  current wide-open create/edit as the intended end state.
