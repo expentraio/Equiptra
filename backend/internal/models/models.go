@@ -142,6 +142,11 @@ type BookingRequest struct {
 	IsBulk      *bool   `json:"is_bulk,omitempty"`
 	// Count of active (allocated/checked_out) allocations against this request.
 	AllocatedCount int `json:"allocated_count"`
+	// Count of allocations against this request regardless of status —
+	// includes 'returned', unlike AllocatedCount. This is the real signal
+	// for "has allocation history" (e.g. gating project delete), since a
+	// fully-returned request still carries checkout/checkin/damage history.
+	TotalAllocationCount int `json:"total_allocation_count"`
 }
 
 // BookingAllocation is the specific asset assigned once someone pulls a

@@ -43,6 +43,7 @@ export function BookingBoard() {
   const [expanded, setExpanded] = useState<number | null>(null)
   const [conflictCount, setConflictCount] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
+  const hasAllocationHistory = requests.some((r) => r.total_allocation_count > 0)
 
   function reload() {
     if (!id) return
@@ -85,7 +86,11 @@ export function BookingBoard() {
 
   async function deleteProject() {
     if (!project) return
-    if (!confirm(`Permanently delete "${project.name}"? This cannot be undone.`)) return
+    const message =
+      requests.length > 0
+        ? `Permanently delete "${project.name}"? This will also remove ${requests.length} empty booking request${requests.length === 1 ? '' : 's'} with no allocation history. This cannot be undone.`
+        : `Permanently delete "${project.name}"? This cannot be undone.`
+    if (!confirm(message)) return
     setActionError(null)
     try {
       await api.delete(`/projects/${project.id}`)
@@ -167,15 +172,15 @@ export function BookingBoard() {
         )}
         <button
           onClick={deleteProject}
-          disabled={requests.length > 0}
-          title={requests.length > 0 ? 'Cannot delete a project with booking requests attached — use Cancel instead' : undefined}
+          disabled={hasAllocationHistory}
+          title={hasAllocationHistory ? 'Cannot delete a project with allocation history — use Cancel instead' : undefined}
           className="text-[12.5px] font-medium text-ink-soft hover:text-red disabled:cursor-not-allowed disabled:text-[#C9C5BA] disabled:hover:text-[#C9C5BA]"
         >
           Delete project
         </button>
-        {requests.length > 0 && (
+        {hasAllocationHistory && (
           <span className="text-[12px] text-ink-soft">
-            Can't delete — {requests.length} booking{requests.length === 1 ? '' : 's'} attached. Cancel instead.
+            Can't delete — this project has allocation (checkout/check-in) history. Cancel instead.
           </span>
         )}
       </div>

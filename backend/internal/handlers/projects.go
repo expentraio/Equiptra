@@ -184,13 +184,49 @@ func (a *API) DeleteProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	tag, err := a.DB.Exec(r.Context(), `DELETE FROM projects WHERE id = $1`, id)
+
+	// The real orphaning risk is allocation history (checkout/checkin/damage
+	// records) — not the mere existence of a booking_request row. A
+	// cancelled or never-allocated booking_request has nothing worth
+	// preserving, so it's safe to cascade-delete those along with the
+	// project; only actual allocation history blocks the delete.
+	var allocationCount int
+	err = a.DB.QueryRow(r.Context(), `
+		SELECT COUNT(*) FROM booking_allocations ba
+		JOIN booking_requests br ON br.id = ba.booking_request_id
+		WHERE br.project_id = $1`, id,
+	).Scan(&allocationCount)
 	if err != nil {
-		writeError(w, http.StatusConflict, "cannot delete project with linked booking requests")
+		writeError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if allocationCount > 0 {
+		writeError(w, http.StatusConflict, "cannot delete project — it has allocation history; cancel it instead")
+		return
+	}
+
+	tx, err := a.DB.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "delete failed")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	if _, err := tx.Exec(r.Context(), `DELETE FROM booking_requests WHERE project_id = $1`, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete failed")
+		return
+	}
+	tag, err := tx.Exec(r.Context(), `DELETE FROM projects WHERE id = $1`, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "delete failed")
 		return
 	}
 	if tag.RowsAffected() == 0 {
 		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete failed")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

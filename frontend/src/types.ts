@@ -95,6 +95,7 @@ export interface BookingRequest {
   project_name?: string
   is_bulk?: boolean
   allocated_count: number
+  total_allocation_count: number
 }
 
 export interface BookingAllocation {

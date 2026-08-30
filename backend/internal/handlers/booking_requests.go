@@ -18,7 +18,8 @@ const bookingRequestSelectCols = `
 	br.id, br.project_id, br.product_id, br.placeholder_description, br.quantity_requested,
 	br.date_out, br.date_in, br.status, br.shortage_flag, br.sub_hire_notes, br.created_at, br.updated_at,
 	p.name, p.category, a.is_bulk, pr.name,
-	COALESCE((SELECT COUNT(*) FROM booking_allocations ba WHERE ba.booking_request_id = br.id AND ba.status IN ('allocated','checked_out')), 0)`
+	COALESCE((SELECT COUNT(*) FROM booking_allocations ba WHERE ba.booking_request_id = br.id AND ba.status IN ('allocated','checked_out')), 0),
+	COALESCE((SELECT COUNT(*) FROM booking_allocations ba WHERE ba.booking_request_id = br.id), 0)`
 
 // isBulkAgg reports whether the product's assets are bulk-tracked (used in
 // bookingRequestSelectCols via a correlated lateral — see queryBookingRequests).
@@ -27,7 +28,7 @@ func scanBookingRequest(row pgx.Row) (models.BookingRequest, error) {
 	var br models.BookingRequest
 	err := row.Scan(&br.ID, &br.ProjectID, &br.ProductID, &br.PlaceholderDescription, &br.QuantityRequested,
 		&br.DateOut, &br.DateIn, &br.Status, &br.ShortageFlag, &br.SubHireNotes, &br.CreatedAt, &br.UpdatedAt,
-		&br.ProductName, &br.Category, &br.IsBulk, &br.ProjectName, &br.AllocatedCount)
+		&br.ProductName, &br.Category, &br.IsBulk, &br.ProjectName, &br.AllocatedCount, &br.TotalAllocationCount)
 	return br, err
 }
 
