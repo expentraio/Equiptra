@@ -3,7 +3,7 @@ import { GridIcon, FolderIcon, FileIcon, LogOutIcon } from './icons'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
-  { to: '/assets', label: 'Assets', icon: GridIcon },
+  { to: '/products', label: 'Products', icon: GridIcon },
   { to: '/projects', label: 'Projects', icon: FolderIcon },
   { to: '/carnets', label: 'Carnets', icon: FileIcon },
   { to: '/delivery-notes', label: 'Delivery notes', icon: FileIcon },

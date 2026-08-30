@@ -44,6 +44,23 @@ export interface Asset {
   product_image_url?: string
 }
 
+export interface ProductListItem extends Product {
+  total_units: number
+  available_units: number
+}
+
+export interface CurrentAllocationInfo {
+  allocation_id: number
+  project_name: string
+  date_out: string
+  date_in: string
+  status: string
+}
+
+export interface ProductAssetItem extends Asset {
+  current_allocations: CurrentAllocationInfo[]
+}
+
 export interface Project {
   id: number
   name: string

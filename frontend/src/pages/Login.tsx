@@ -16,7 +16,7 @@ export function Login() {
     setSubmitting(true)
     try {
       await login(email, password)
-      navigate('/assets')
+      navigate('/products')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not sign in')
     } finally {

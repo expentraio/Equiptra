@@ -68,6 +68,7 @@ func main() {
 		r.Route("/products", func(r chi.Router) {
 			r.Get("/", api.ListProducts)
 			r.Get("/{id}", api.GetProduct)
+			r.Get("/{id}/assets", api.ListProductAssets)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAdmin)
 				r.Post("/", api.CreateProduct)

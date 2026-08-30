@@ -3,7 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Layout } from './components/Layout'
 import { Login } from './pages/Login'
-import { Assets } from './pages/Assets'
+import { Products } from './pages/Products'
+import { ProductDetail } from './pages/ProductDetail'
 import { Projects } from './pages/Projects'
 import { BookingBoard } from './pages/BookingBoard'
 import { Carnets } from './pages/Carnets'
@@ -27,8 +28,9 @@ function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<Navigate to="/assets" replace />} />
-        <Route path="/assets" element={<Assets />} />
+        <Route path="/" element={<Navigate to="/products" replace />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<BookingBoard />} />
         <Route path="/carnets" element={<Carnets />} />
