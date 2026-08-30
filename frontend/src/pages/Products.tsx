@@ -2,13 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Asset, ProductListItem } from '../types'
+import { CATEGORIES } from '../constants'
 import { ProductThumbnail } from '../components/ProductThumbnail'
-import { SearchIcon, ScanIcon } from '../components/icons'
-
-const CATEGORIES = [
-  'Sound', 'Vision', 'Cameras', 'Power', 'Cases', 'Networking', 'Card',
-  'Grip', 'Lighting', 'Computers', 'Control', 'VTR', 'Other', 'Cable', 'Vehicle', 'Test',
-]
+import { ProductFormModal } from '../components/ProductFormModal'
+import { SearchIcon, ScanIcon, PlusIcon } from '../components/icons'
 
 function availabilityClass(available: number, total: number) {
   if (total === 0) return 'bg-[#EDEBE4] text-ink-soft'
@@ -22,6 +19,8 @@ export function Products() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<string | null>(null)
+  const [showNew, setShowNew] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -62,7 +61,7 @@ export function Products() {
       cancelled = true
       clearTimeout(timeout)
     }
-  }, [search, category, navigate])
+  }, [search, category, navigate, refreshKey])
 
   const subtitle = useMemo(() => {
     if (loading) return 'Loading…'
@@ -76,6 +75,13 @@ export function Products() {
           <h1 className="text-[21px] font-bold">Products</h1>
           <p className="mt-1 text-[13px] text-ink-soft">{subtitle}</p>
         </div>
+        <button
+          onClick={() => setShowNew(true)}
+          className="flex items-center gap-1.5 rounded-control bg-teal px-4 py-2.25 text-[13px] font-medium text-white hover:opacity-90"
+        >
+          <PlusIcon className="h-4 w-4" />
+          New product
+        </button>
       </div>
 
       <div className="mb-4.5 flex gap-2">
@@ -136,6 +142,16 @@ export function Products() {
 
       {!loading && products.length === 0 && (
         <div className="mt-10 text-center text-[13px] text-ink-soft">No products match your search.</div>
+      )}
+
+      {showNew && (
+        <ProductFormModal
+          onClose={() => setShowNew(false)}
+          onSaved={() => {
+            setShowNew(false)
+            setRefreshKey((k) => k + 1)
+          }}
+        />
       )}
     </div>
   )

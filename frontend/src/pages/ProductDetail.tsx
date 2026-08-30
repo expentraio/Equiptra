@@ -5,7 +5,9 @@ import type { Product, ProductAssetItem } from '../types'
 import { AssetTag } from '../components/AssetTag'
 import { AssetDetailPanel } from '../components/AssetDetailPanel'
 import { ProductThumbnail } from '../components/ProductThumbnail'
-import { ChevronLeftIcon } from '../components/icons'
+import { ProductFormModal } from '../components/ProductFormModal'
+import { AssetFormModal } from '../components/AssetFormModal'
+import { ChevronLeftIcon, EditIcon, PlusIcon } from '../components/icons'
 
 const statusLabel: Record<ProductAssetItem['status'], string> = {
   active: 'Active',
@@ -34,9 +36,12 @@ export function ProductDetail() {
   const [assets, setAssets] = useState<ProductAssetItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ProductAssetItem | null>(null)
+  const [showEditProduct, setShowEditProduct] = useState(false)
+  const [showNewAsset, setShowNewAsset] = useState(false)
+  const [editingAsset, setEditingAsset] = useState<ProductAssetItem | null>(null)
   const highlightRef = useRef<HTMLTableRowElement>(null)
 
-  useEffect(() => {
+  function reload() {
     if (!id) return
     setLoading(true)
     Promise.all([api.get<Product>(`/products/${id}`), api.get<ProductAssetItem[]>(`/products/${id}/assets`)])
@@ -45,7 +50,9 @@ export function ProductDetail() {
         setAssets(a)
       })
       .finally(() => setLoading(false))
-  }, [id])
+  }
+
+  useEffect(reload, [id])
 
   useEffect(() => {
     if (highlightAssetId && highlightRef.current) {
@@ -66,27 +73,47 @@ export function ProductDetail() {
         Back to products
       </Link>
 
-      <div className="mb-5.5 flex items-start gap-4">
-        <ProductThumbnail url={product.image_url} size="panel" />
-        <div>
-          <h1 className="text-[21px] font-bold">{product.name}</h1>
-          <p className="mt-1 text-[13px] text-ink-soft">
-            {product.category}
-            {product.manufacturer ? ` · ${product.manufacturer}` : ''}
-          </p>
-          <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-ink-soft">
-            {product.weight_kg != null && <span>Weight: {product.weight_kg} kg</span>}
-            <span>Origin: {product.country_of_origin_code || 'Not set'}</span>
-            {product.is_accessory && <span className="italic">Accessory</span>}
+      <div className="mb-5.5 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <ProductThumbnail url={product.image_url} size="panel" />
+          <div>
+            <h1 className="text-[21px] font-bold">{product.name}</h1>
+            <p className="mt-1 text-[13px] text-ink-soft">
+              {product.category}
+              {product.manufacturer ? ` · ${product.manufacturer}` : ''}
+            </p>
+            <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-ink-soft">
+              {product.weight_kg != null && <span>Weight: {product.weight_kg} kg</span>}
+              <span>Origin: {product.country_of_origin_code || 'Not set'}</span>
+              {product.is_accessory && <span className="italic">Accessory</span>}
+            </div>
           </div>
         </div>
+        <button
+          onClick={() => setShowEditProduct(true)}
+          className="flex items-center gap-1.5 rounded-control border border-border bg-surface px-3.5 py-2 text-[12.5px] font-medium text-ink-soft hover:border-teal hover:text-teal"
+        >
+          <EditIcon className="h-3.5 w-3.5" />
+          Edit product
+        </button>
+      </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">Assets</div>
+        <button
+          onClick={() => setShowNewAsset(true)}
+          className="flex items-center gap-1.5 rounded-control bg-teal px-3.5 py-2 text-[12.5px] font-medium text-white hover:opacity-90"
+        >
+          <PlusIcon className="h-3.5 w-3.5" />
+          Add asset
+        </button>
       </div>
 
       <div className="overflow-hidden rounded-card border border-border bg-surface">
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {['Asset', 'Serial Number', 'Location', 'Status', 'Current Booking'].map((h) => (
+              {['Asset', 'Serial Number', 'Location', 'Status', 'Current Booking', ''].map((h) => (
                 <th
                   key={h}
                   className="border-b border-border px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[.05em] text-ink-soft"
@@ -128,12 +155,23 @@ export function ProductDetail() {
                       <>{asset.current_allocations.length} units currently out</>
                     )}
                   </td>
+                  <td className="border-b border-border px-4 py-3.25 text-right text-[12px]">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingAsset(asset)
+                      }}
+                      className="font-medium text-ink-soft hover:text-teal"
+                    >
+                      Edit
+                    </button>
+                  </td>
                 </tr>
               )
             })}
             {assets.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-ink-soft">
+                <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-ink-soft">
                   No individual units on record for this product.
                 </td>
               </tr>
@@ -143,6 +181,40 @@ export function ProductDetail() {
       </div>
 
       {selected && <AssetDetailPanel asset={selected} onClose={() => setSelected(null)} />}
+
+      {showEditProduct && (
+        <ProductFormModal
+          product={product}
+          onClose={() => setShowEditProduct(false)}
+          onSaved={() => {
+            setShowEditProduct(false)
+            reload()
+          }}
+        />
+      )}
+
+      {showNewAsset && (
+        <AssetFormModal
+          productId={product.id}
+          onClose={() => setShowNewAsset(false)}
+          onSaved={() => {
+            setShowNewAsset(false)
+            reload()
+          }}
+        />
+      )}
+
+      {editingAsset && (
+        <AssetFormModal
+          productId={product.id}
+          asset={editingAsset}
+          onClose={() => setEditingAsset(null)}
+          onSaved={() => {
+            setEditingAsset(null)
+            reload()
+          }}
+        />
+      )}
     </div>
   )
 }
