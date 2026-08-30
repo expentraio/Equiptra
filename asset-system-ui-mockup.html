@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Equiptra — UI Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F7F8FA;
+    --surface:#FFFFFF;
+    --ink:#0F172A;
+    --ink-soft:#64748B;
+    --border:#E4E9EF;
+    --border-strong:#CBD3DD;
+    --teal:#0EA68A;
+    --teal-fill:#E6F4EF;
+    --navy:#0F172A;
+    --amber:#B4661A;
+    --amber-fill:#FBEEE0;
+    --red:#A83E33;
+    --red-fill:#FBEAE7;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',sans-serif; font-size:14px;
+  }
+  h1,h2,h3,.disp{font-family:'Inter',sans-serif; font-weight:700; margin:0; letter-spacing:-.01em;}
+  .mono{font-family:'Inter',sans-serif; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:.01em;}
+  .icon{width:16px; height:16px; display:inline-block; vertical-align:-3px; stroke:currentColor; stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .app{display:flex; min-height:100vh;}
+
+  /* SIDEBAR */
+  .sidebar{
+    width:200px; flex-shrink:0; background:var(--surface);
+    border-right:1px solid var(--border); padding:20px 0;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .brand{padding:0 20px 18px; border-bottom:1px solid var(--border); margin-bottom:12px;}
+  .brand-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .brand-mark{display:flex; flex-direction:column; gap:3px;}
+  .brand-mark .bar{height:5px; background:var(--teal); border-radius:3px;}
+  .brand-mark .b1{width:22px;} .brand-mark .b2{width:16px;} .brand-mark .b3{width:10px;}
+  .brand .disp{font-size:16px; letter-spacing:.04em;}
+  .brand span{color:var(--ink-soft); font-size:11px; letter-spacing:.01em;}
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 20px;
+    color:var(--ink-soft); cursor:pointer; border-left:3px solid transparent;
+    font-weight:500; font-size:13.5px;
+  }
+  .nav-item:hover{background:var(--bg);}
+  .nav-item.active{color:var(--teal); border-left-color:var(--teal); background:var(--teal-fill);}
+  .nav-icon{width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;}
+
+  /* MAIN */
+  .main{flex:1; padding:28px 32px; max-width:1100px;}
+  .topbar{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px; gap:20px; flex-wrap:wrap;}
+  .topbar h1{font-size:21px;}
+  .topbar p{color:var(--ink-soft); margin:4px 0 0; font-size:13px;}
+
+  .search-row{display:flex; gap:8px; margin-bottom:18px;}
+  .search-box{
+    flex:1; display:flex; align-items:center; gap:8px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:9px 14px; max-width:420px;
+  }
+  .search-box input{border:none; outline:none; flex:1; font-size:13.5px; background:transparent; font-family:'Inter';}
+  .scan-btn{
+    display:flex; align-items:center; gap:6px; background:var(--ink); color:#fff;
+    border:none; border-radius:var(--radius); padding:9px 16px; font-size:13px; font-weight:500;
+    cursor:pointer; font-family:'Inter';
+  }
+  .scan-btn:hover{opacity:.88;}
+
+  .chips{display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;}
+  .chip{
+    padding:6px 13px; border-radius:20px; border:1px solid var(--border);
+    background:var(--surface); font-size:12.5px; font-weight:500; color:var(--ink-soft); cursor:pointer;
+  }
+  .chip.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+
+  /* ASSET TAG — signature element */
+  .tag{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--ink); color:#fff; border-radius:5px;
+    padding:3px 9px 3px 7px; font-size:11.5px; font-weight:500; letter-spacing:.02em;
+  }
+  .tag .rivet{width:5px; height:5px; border-radius:50%; background:#fff; opacity:.55; flex-shrink:0;}
+
+  /* ASSET GRID */
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px;}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; cursor:pointer; transition:border-color .12s;
+  }
+  .card:hover{border-color:var(--border-strong);}
+  .card-top{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;}
+  .card-name{font-weight:600; font-size:14px; line-height:1.3; margin-bottom:2px;}
+  .card-cat{color:var(--ink-soft); font-size:12px;}
+  .card-meta{display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:12px; color:var(--ink-soft);}
+  .badge{padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600;}
+  .badge.ok{background:var(--teal-fill); color:var(--teal);}
+  .badge.out{background:var(--amber-fill); color:var(--amber);}
+  .badge.off{background:#EDEBE4; color:var(--ink-soft);}
+
+  /* DETAIL PANEL */
+  .overlay{
+    position:fixed; inset:0; background:rgba(28,27,25,.35); display:none;
+    align-items:stretch; justify-content:flex-end; z-index:50;
+  }
+  .overlay.show{display:flex;}
+  .panel{
+    width:380px; max-width:92vw; background:var(--surface); height:100%;
+    padding:26px 26px 30px; overflow-y:auto; border-left:1px solid var(--border);
+  }
+  .panel-close{float:right; background:none; border:none; cursor:pointer; color:var(--ink-soft); padding:4px;}
+  .panel h2{font-size:18px; margin-bottom:2px;}
+  .panel .sub{color:var(--ink-soft); font-size:12.5px; margin-bottom:18px;}
+  .kv{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px;}
+  .kv .k{color:var(--ink-soft);}
+  .kv .v{font-weight:500; text-align:right;}
+  .section-label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:22px 0 10px; font-weight:600;}
+  .history-row{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); font-size:12.5px;}
+  .history-row .proj{font-weight:500;}
+  .history-row .date{color:var(--ink-soft);}
+  .flag-pill{display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:11.5px; font-weight:600; background:var(--red-fill); color:var(--red); margin-top:4px;}
+
+  /* PROJECTS LIST */
+  .proj-list{display:flex; flex-direction:column; gap:10px;}
+  .proj-row{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;
+  }
+  .proj-row:hover{border-color:var(--border-strong);}
+  .proj-left .disp{font-size:15px; margin-bottom:3px;}
+  .proj-left .client{color:var(--ink-soft); font-size:12.5px;}
+  .proj-right{display:flex; align-items:center; gap:14px;}
+  .proj-dates{font-size:12.5px; color:var(--ink-soft); text-align:right;}
+  .status-pill{padding:4px 11px; border-radius:20px; font-size:11.5px; font-weight:600;}
+  .status-pill.confirmed{background:var(--teal-fill); color:var(--teal);}
+  .status-pill.tentative{background:#EDEBE4; color:var(--ink-soft);}
+  .carnet-quick-btn{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px; cursor:pointer; color:var(--ink-soft); display:flex;}
+  .carnet-quick-btn:hover{border-color:var(--teal); color:var(--teal);}
+
+  /* BOOKING BOARD */
+  .conflict-banner{
+    background:var(--red-fill); border:1px solid #E8C5BE; color:var(--red);
+    border-radius:var(--radius); padding:12px 16px; font-size:13px; font-weight:500;
+    display:flex; gap:10px; align-items:flex-start; margin-bottom:18px;
+  }
+  .booking-table{width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  .booking-table th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600;}
+  .booking-table td{padding:13px 16px; border-bottom:1px solid var(--border); font-size:13px;}
+  .booking-table tr:last-child td{border-bottom:none;}
+  .booking-table tr.conflict-row{background:var(--red-fill);}
+  .shortage-tag{background:var(--amber-fill); color:var(--amber); padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600;}
+
+  /* CARNET */
+  .carnet-header{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;}
+  .carnet-header .disp{font-size:15px;}
+  .carnet-header p{color:var(--ink-soft); font-size:12.5px; margin:3px 0 0;}
+  .export-btn{background:var(--teal); color:#fff; border:none; border-radius:var(--radius); padding:10px 18px; font-weight:500; font-size:13px; cursor:pointer; font-family:'Inter';}
+  .export-btn.secondary{background:var(--surface); color:var(--teal); border:1px solid var(--border-strong);}
+  .flag-row{color:var(--amber); font-weight:600;}
+
+  .page{display:none;}
+  .page.active{display:block;}
+
+  @media(max-width:760px){
+    .app{flex-direction:column;}
+    .sidebar{
+      width:100%; flex-direction:row; overflow-x:auto; padding:10px 12px;
+      border-right:none; border-bottom:1px solid var(--border); gap:4px;
+    }
+    .brand{display:none;}
+    .nav-item{border-left:none; border-bottom:3px solid transparent; padding:8px 12px; white-space:nowrap;}
+    .nav-item.active{border-left:none; border-bottom-color:var(--teal);}
+    .main{padding:18px;}
+    .panel{width:100%; max-width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-row">
+        <div class="brand-mark">
+          <span class="bar b1"></span><span class="bar b2"></span><span class="bar b3"></span>
+        </div>
+        <div class="disp" style="text-transform:uppercase;">Equiptra</div>
+      </div>
+      <span>Equipment management, simplified.</span>
+    </div>
+    <div class="nav-item active" data-page="assets"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> Assets</div>
+    <div class="nav-item" data-page="projects"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg> Projects</div>
+    <div class="nav-item" data-page="carnet"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6"/></svg> Carnets</div>
+  </div>
+
+  <div class="main">
+
+    <!-- ASSETS PAGE -->
+    <div class="page active" id="page-assets">
+      <div class="topbar">
+        <div>
+          <h1>Assets</h1>
+          <p>1,397 items across 16 categories · LDMtv store</p>
+        </div>
+      </div>
+      <div class="search-row">
+        <div class="search-box">
+          <svg class="icon" viewBox="0 0 24 24" style="stroke:var(--ink-soft);"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input placeholder="Search by name, asset number, or serial…">
+        </div>
+        <button class="scan-btn"><svg class="icon" viewBox="0 0 24 24" style="stroke:#fff;"><path d="M3 7V4a1 1 0 0 1 1-1h3M17 3h3a1 1 0 0 1 1 1v3M21 17v3a1 1 0 0 1-1 1h-3M7 21H4a1 1 0 0 1-1-1v-3"/><path d="M7 12h10"/></svg> Scan tag</button>
+      </div>
+      <div class="chips">
+        <div class="chip active">All</div>
+        <div class="chip">Sound</div>
+        <div class="chip">Vision</div>
+        <div class="chip">Cameras</div>
+        <div class="chip">Power</div>
+        <div class="chip">Networking</div>
+        <div class="chip">Cases</div>
+      </div>
+      <div class="grid" id="asset-grid"></div>
+    </div>
+
+    <!-- PROJECTS PAGE -->
+    <div class="page" id="page-projects">
+      <div class="topbar">
+        <div>
+          <h1>Projects</h1>
+          <p>Booking status and asset assignment</p>
+        </div>
+      </div>
+      <div class="proj-list" id="proj-list"></div>
+    </div>
+
+    <!-- BOOKING BOARD (sub-page) -->
+    <div class="page" id="page-booking">
+      <div class="topbar">
+        <div>
+          <h1 id="booking-proj-name">Outside Broadcast — Twickenham</h1>
+          <p>12–15 Sept 2026 · Client: Six Nations Media</p>
+        </div>
+        <div class="chip" onclick="showPage('projects')" style="cursor:pointer; display:flex; align-items:center; gap:6px;"><svg class="icon" viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to projects</div>
+      </div>
+      <div class="conflict-banner">
+        <svg class="icon" viewBox="0 0 24 24" style="stroke:var(--red); flex-shrink:0; margin-top:1px;"><path d="M12 9v4M12 17h.01M10.3 3.9L2.7 18a1.7 1.7 0 0 0 1.5 2.5h15.6a1.7 1.7 0 0 0 1.5-2.5L13.7 3.9a1.7 1.7 0 0 0-3.4 0z"/></svg>
+        <div>
+          <strong>1 conflict found.</strong> Yellobrik OTT 1842 (asset #A-2291) is already confirmed on "Chelsea Flower Show" for an overlapping date range (13–14 Sept). Resolve before confirming this booking.
+        </div>
+      </div>
+      <table class="booking-table">
+        <thead>
+          <tr><th>Asset</th><th>Category</th><th>Dates</th><th>Status</th><th>Notes</th></tr>
+        </thead>
+        <tbody id="booking-rows"></tbody>
+      </table>
+    </div>
+
+    <!-- CARNET PAGE -->
+    <div class="page" id="page-carnet">
+      <div class="topbar">
+        <div>
+          <h1>Carnets</h1>
+          <p>Any project's confirmed bookings can be exported — not every job needs one</p>
+        </div>
+      </div>
+      <div class="carnet-header">
+        <div>
+          <div class="disp">Outside Broadcast — Twickenham</div>
+          <p>7 items · total weight 34.2 kg · total value £18,450</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="export-btn secondary"><svg class="icon" viewBox="0 0 24 24" style="stroke:var(--teal);"><path d="M12 3v13M7 11l5 5 5-5M4 21h16"/></svg> Export CSV</button>
+          <button class="export-btn"><svg class="icon" viewBox="0 0 24 24" style="stroke:#fff;"><path d="M12 3v13M7 11l5 5 5-5M4 21h16"/></svg> Export PDF</button>
+        </div>
+      </div>
+      <table class="booking-table">
+        <thead>
+          <tr><th>Description</th><th>Qty</th><th>Weight</th><th>Value</th><th>Origin</th></tr>
+        </thead>
+        <tbody id="carnet-rows"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- ASSET DETAIL OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="panel">
+    <button class="panel-close" onclick="closePanel()"><svg class="icon" viewBox="0 0 24 24" style="stroke:var(--ink-soft);"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <h2 id="d-name">Yellobrik OTT 1842</h2>
+    <div class="sub" id="d-cat">Vision · LynxTechnik</div>
+
+    <div class="flag-pill" id="d-conflict" style="display:none;"><svg class="icon" viewBox="0 0 24 24" style="width:13px;height:13px; stroke:var(--red);"><path d="M12 9v4M12 17h.01M10.3 3.9L2.7 18a1.7 1.7 0 0 0 1.5 2.5h15.6a1.7 1.7 0 0 0 1.5-2.5L13.7 3.9a1.7 1.7 0 0 0-3.4 0z"/></svg> Booking conflict — 13–14 Sept</div>
+
+    <div class="kv"><span class="k">Asset number</span><span class="v mono" id="d-num">A-2291</span></div>
+    <div class="kv"><span class="k">Serial number</span><span class="v mono" id="d-serial">LX-88213</span></div>
+    <div class="kv"><span class="k">Location</span><span class="v" id="d-loc">V16</span></div>
+    <div class="kv"><span class="k">Country of origin</span><span class="v" id="d-coo">DE</span></div>
+    <div class="kv"><span class="k">Weight</span><span class="v" id="d-weight">1.2 kg</span></div>
+    <div class="kv"><span class="k">Replacement value</span><span class="v" id="d-value">£2,100</span></div>
+    <div class="kv"><span class="k">Status</span><span class="v" id="d-status">Active</span></div>
+
+    <div class="section-label">Booking history</div>
+    <div id="d-history"></div>
+
+    <div class="section-label">Service records</div>
+    <div id="d-service"></div>
+  </div>
+</div>
+
+<script>
+const assets = [
+  {num:'A-1042', name:'100m Green XLR Drum', cat:'Sound', loc:'C2', status:'ok', serial:'—', coo:'GB', weight:'5.0 kg', value:'£240', hist:[{p:'Chelsea Flower Show',d:'2–4 Sept'}], service:[]},
+  {num:'A-2291', name:'Yellobrik OTT 1842', cat:'Vision', loc:'V16', status:'out', serial:'LX-88213', coo:'DE', weight:'1.2 kg', value:'£2,100', conflict:true, hist:[{p:'Chelsea Flower Show',d:'13–14 Sept'},{p:'Outside Broadcast — Twickenham',d:'12–15 Sept'}], service:[{d:'Mar 2026',t:'Signal dropout — repaired'}]},
+  {num:'A-0871', name:'MDU12 -32A', cat:'Power', loc:'A2', status:'ok', serial:'TSL-4471', coo:'—', weight:'8.4 kg', value:'£890', hist:[], service:[]},
+  {num:'A-1560', name:'Kraken X Headset', cat:'Cameras', loc:'A3', status:'off', serial:'RZ-2201', coo:'—', weight:'0.3 kg', value:'£85', hist:[], service:[{d:'Jan 2026',t:'Mic capsule failed — written off'}]},
+  {num:'A-0334', name:'Mac Mini', cat:'Computers', loc:'comms room', status:'ok', serial:'C02-9931', coo:'US', weight:'1.3 kg', value:'£950', hist:[], service:[]},
+  {num:'A-1188', name:'Prosafe GS728TP', cat:'Networking', loc:'N2', status:'ok', serial:'NG-7712', coo:'CN', weight:'3.1 kg', value:'£410', hist:[], service:[]},
+  {num:'A-2007', name:'VidiU', cat:'Vision', loc:'V16', status:'ok', serial:'TD-5523', coo:'US', weight:'0.6 kg', value:'£520', hist:[], service:[]},
+  {num:'A-0755', name:'3330-16 Bowl Adapter', cat:'Grip', loc:'K1', status:'ok', serial:'—', coo:'—', weight:'2.1 kg', value:'£310', hist:[], service:[]},
+];
+
+const statusLabel = {ok:'Available', out:'On project', off:'Written off'};
+
+function renderAssets(){
+  const grid = document.getElementById('asset-grid');
+  grid.innerHTML = assets.map((a,i)=>`
+    <div class="card" onclick="openPanel(${i})">
+      <div class="card-top">
+        <div>
+          <div class="card-name">${a.name}</div>
+          <div class="card-cat">${a.cat}</div>
+        </div>
+      </div>
+      <span class="tag"><span class="rivet"></span>${a.num}</span>
+      <div class="card-meta">
+        <span>${a.loc}</span>
+        <span class="badge ${a.status}">${statusLabel[a.status]}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openPanel(i){
+  const a = assets[i];
+  document.getElementById('d-name').textContent = a.name;
+  document.getElementById('d-cat').textContent = a.cat + (a.serial!=='—' ? ' · ' + a.serial.split('-')[0] : '');
+  document.getElementById('d-num').textContent = a.num;
+  document.getElementById('d-serial').textContent = a.serial;
+  document.getElementById('d-loc').textContent = a.loc;
+  document.getElementById('d-coo').textContent = a.coo === '—' ? 'Not set' : a.coo;
+  document.getElementById('d-weight').textContent = a.weight;
+  document.getElementById('d-value').textContent = a.value;
+  document.getElementById('d-status').textContent = statusLabel[a.status];
+  document.getElementById('d-conflict').style.display = a.conflict ? 'inline-flex' : 'none';
+  document.getElementById('d-history').innerHTML = a.hist.length ? a.hist.map(h=>`
+    <div class="history-row"><span class="proj">${h.p}</span><span class="date">${h.d}</span></div>
+  `).join('') : '<div class="history-row"><span class="date">No bookings on record</span></div>';
+  document.getElementById('d-service').innerHTML = a.service.length ? a.service.map(s=>`
+    <div class="history-row"><span class="proj">${s.t}</span><span class="date">${s.d}</span></div>
+  `).join('') : '<div class="history-row"><span class="date">No faults logged</span></div>';
+  document.getElementById('overlay').classList.add('show');
+}
+function closePanel(){ document.getElementById('overlay').classList.remove('show'); }
+
+const projects = [
+  {name:'Outside Broadcast — Twickenham', client:'Six Nations Media', dates:'12–15 Sept 2026', status:'tentative', conflict:true},
+  {name:'Chelsea Flower Show', client:'RHS', dates:'2–14 Sept 2026', status:'confirmed'},
+  {name:'Corporate AV — Canary Wharf', client:'Barclays', dates:'20 Sept 2026', status:'confirmed'},
+];
+
+function renderProjects(){
+  document.getElementById('proj-list').innerHTML = projects.map(p=>`
+    <div class="proj-row" onclick="showPage('booking')">
+      <div class="proj-left">
+        <div class="disp">${p.name}${p.conflict ? ' <svg class="icon" viewBox="0 0 24 24" style="width:13px;height:13px;stroke:var(--red);vertical-align:-1px;"><path d="M12 9v4M12 17h.01M10.3 3.9L2.7 18a1.7 1.7 0 0 0 1.5 2.5h15.6a1.7 1.7 0 0 0 1.5-2.5L13.7 3.9a1.7 1.7 0 0 0-3.4 0z"/></svg>' : ''}</div>
+        <div class="client">${p.client}</div>
+      </div>
+      <div class="proj-right">
+        <div class="proj-dates">${p.dates}</div>
+        <span class="status-pill ${p.status}">${p.status}</span>
+        <button class="carnet-quick-btn" onclick="event.stopPropagation(); showPage('carnet');" title="Generate carnet"><svg class="icon" viewBox="0 0 24 24" style="width:15px;height:15px;"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6"/></svg></button>
+      </div>
+    </div>
+  `).join('');
+}
+
+const bookingRows = [
+  {name:'Yellobrik OTT 1842', num:'A-2291', cat:'Vision', dates:'12–15 Sept', status:'Tentative', conflict:true, note:'Clashes with Chelsea Flower Show'},
+  {name:'MDU12 -32A', num:'A-0871', cat:'Power', dates:'12–15 Sept', status:'Confirmed', note:''},
+  {name:'VidiU', num:'A-2007', cat:'Vision', dates:'12–15 Sept', status:'Confirmed', note:''},
+  {name:'Radio mic set (x4)', num:'—', cat:'Sound', dates:'12–15 Sept', status:'Short', shortage:true, note:'2 units short — sub-hire in progress'},
+];
+
+function renderBooking(){
+  document.getElementById('booking-rows').innerHTML = bookingRows.map(b=>`
+    <tr class="${b.conflict?'conflict-row':''}">
+      <td><span class="tag"><span class="rivet"></span>${b.num}</span> ${b.name}</td>
+      <td>${b.cat}</td>
+      <td>${b.dates}</td>
+      <td>${b.shortage ? '<span class="shortage-tag">Short</span>' : b.status}</td>
+      <td>${b.note}</td>
+    </tr>
+  `).join('');
+}
+
+const carnetRows = [
+  {desc:'Yellobrik OTT 1842 fibre converter', qty:1, weight:'1.2 kg', value:'£2,100', origin:'DE'},
+  {desc:'MDU12 -32A power distribution unit', qty:1, weight:'8.4 kg', value:'£890', origin:'GB'},
+  {desc:'VidiU streaming encoder', qty:1, weight:'0.6 kg', value:'£520', origin:'US'},
+  {desc:'100m Green XLR drum', qty:2, weight:'10.0 kg', value:'£480', origin:'GB'},
+];
+
+function renderCarnet(){
+  document.getElementById('carnet-rows').innerHTML = carnetRows.map(r=>`
+    <tr>
+      <td>${r.desc}</td><td>${r.qty}</td><td>${r.weight}</td><td>${r.value}</td><td>${r.origin}</td>
+    </tr>
+  `).join('');
+}
+
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const navMatch = document.querySelector(`.nav-item[data-page="${name}"]`);
+  if(navMatch) navMatch.classList.add('active');
+  else if(name==='booking'){
+    document.querySelector('.nav-item[data-page="projects"]').classList.add('active');
+  }
+}
+
+document.querySelectorAll('.nav-item').forEach(n=>{
+  n.addEventListener('click', ()=>showPage(n.dataset.page));
+});
+document.querySelectorAll('.chip').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active');
+  });
+});
+
+renderAssets();
+renderProjects();
+renderBooking();
+renderCarnet();
+</script>
+</body>
+</html>

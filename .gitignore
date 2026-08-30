@@ -1,0 +1,14 @@
+# Backend
+backend/equiptra
+backend/*.exe
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
