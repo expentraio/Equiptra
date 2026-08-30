@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Project } from '../types'
 import { FileIcon, PlusIcon } from '../components/icons'
-import { NewProjectModal } from '../components/NewProjectModal'
+import { ProjectFormModal } from '../components/ProjectFormModal'
 
 const statusPillClass: Record<Project['status'], string> = {
   confirmed: 'bg-teal-fill text-teal',
@@ -90,9 +90,9 @@ export function Projects() {
       </div>
 
       {showNew && (
-        <NewProjectModal
+        <ProjectFormModal
           onClose={() => setShowNew(false)}
-          onCreated={() => {
+          onSaved={() => {
             setShowNew(false)
             reload()
           }}

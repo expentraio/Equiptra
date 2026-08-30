@@ -1,17 +1,34 @@
 import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
-import type { Project } from '../types'
+import type { Project, ProjectStatus } from '../types'
 import { CloseIcon } from './icons'
 
-export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [name, setName] = useState('')
-  const [client, setClient] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [carnetRequired, setCarnetRequired] = useState(false)
-  const [clientReference, setClientReference] = useState('')
-  const [orderNumber, setOrderNumber] = useState('')
-  const [deliveryAddress, setDeliveryAddress] = useState('')
+function toDateInput(iso: string) {
+  return iso.slice(0, 10)
+}
+
+const STATUSES: ProjectStatus[] = ['tentative', 'confirmed', 'in_progress', 'completed', 'cancelled']
+
+export function ProjectFormModal({
+  project,
+  onClose,
+  onSaved,
+}: {
+  project?: Project
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isEdit = !!project
+  const [name, setName] = useState(project?.name ?? '')
+  const [client, setClient] = useState(project?.client ?? '')
+  const [startDate, setStartDate] = useState(project ? toDateInput(project.start_date) : '')
+  const [endDate, setEndDate] = useState(project ? toDateInput(project.end_date) : '')
+  const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'tentative')
+  const [carnetRequired, setCarnetRequired] = useState(project?.carnet_required ?? false)
+  const [clientReference, setClientReference] = useState(project?.client_reference ?? '')
+  const [orderNumber, setOrderNumber] = useState(project?.order_number ?? '')
+  const [deliveryAddress, setDeliveryAddress] = useState(project?.delivery_address ?? '')
+  const [notes, setNotes] = useState(project?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -20,20 +37,26 @@ export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; o
     setError(null)
     setSubmitting(true)
     try {
-      await api.post<Project>('/projects', {
+      const body = {
         name,
         client: client || null,
         start_date: new Date(startDate).toISOString(),
         end_date: new Date(endDate).toISOString(),
-        status: 'tentative',
+        status: isEdit ? status : 'tentative',
         carnet_required: carnetRequired,
         client_reference: clientReference || null,
         order_number: orderNumber || null,
         delivery_address: deliveryAddress || null,
-      })
-      onCreated()
+        notes: notes || null,
+      }
+      if (isEdit) {
+        await api.put(`/projects/${project.id}`, body)
+      } else {
+        await api.post('/projects', body)
+      }
+      onSaved()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not create project')
+      setError(err instanceof ApiError ? err.message : 'Could not save project')
     } finally {
       setSubmitting(false)
     }
@@ -47,7 +70,7 @@ export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; o
         className="max-h-[90vh] w-full max-w-[440px] overflow-y-auto rounded-card border border-border bg-surface p-6"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-[16px] font-bold">New project</h2>
+          <h2 className="text-[16px] font-bold">{isEdit ? 'Edit project' : 'New project'}</h2>
           <button type="button" onClick={onClose} className="p-1 text-ink-soft hover:text-ink">
             <CloseIcon className="h-4.5 w-4.5" />
           </button>
@@ -63,6 +86,24 @@ export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; o
               className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
             />
           </label>
+
+          {isEdit && (
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+              Status
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+                className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <label className="flex flex-col gap-1.5 text-[13px] font-medium">
             Client
             <input
@@ -127,6 +168,15 @@ export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; o
               className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
             />
           </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            Notes
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
+            />
+          </label>
 
           <label className="flex items-center gap-2 text-[13px] font-medium">
             <input type="checkbox" checked={carnetRequired} onChange={(e) => setCarnetRequired(e.target.checked)} />
@@ -144,7 +194,7 @@ export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; o
             disabled={submitting}
             className="mt-1 rounded-control bg-teal px-4 py-2.5 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60"
           >
-            {submitting ? 'Creating…' : 'Create project'}
+            {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create project'}
           </button>
         </div>
       </form>

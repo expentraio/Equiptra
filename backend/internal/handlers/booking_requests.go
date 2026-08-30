@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -205,6 +206,21 @@ func (a *API) CreateBookingRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var projectStatus models.ProjectStatus
+	err := a.DB.QueryRow(r.Context(), `SELECT status FROM projects WHERE id = $1`, req.ProjectID).Scan(&projectStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusBadRequest, "project not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "project lookup failed")
+		return
+	}
+	if projectStatus == models.ProjectStatusCancelled {
+		writeError(w, http.StatusBadRequest, "cannot create a booking request for a cancelled project")
+		return
+	}
+
 	shortage := false
 	status := models.BookingRequestStatusDraft
 	if req.ProductID != nil {
@@ -218,7 +234,7 @@ func (a *API) CreateBookingRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	err := a.DB.QueryRow(r.Context(), `
+	err = a.DB.QueryRow(r.Context(), `
 		INSERT INTO booking_requests (project_id, product_id, placeholder_description, quantity_requested, date_out, date_in, status, shortage_flag, sub_hire_notes)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id`,

@@ -2,9 +2,10 @@ import { Fragment, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import type { AllocationWithConflicts, BookingRequest, Project } from '../types'
-import { AlertTriangleIcon, ChevronLeftIcon, FileIcon, PlusIcon } from '../components/icons'
+import { AlertTriangleIcon, ChevronLeftIcon, EditIcon, FileIcon, PlusIcon } from '../components/icons'
 import { NewBookingRequestModal } from '../components/NewBookingRequestModal'
 import { AllocationPanel } from '../components/AllocationPanel'
+import { ProjectFormModal } from '../components/ProjectFormModal'
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -38,6 +39,7 @@ export function BookingBoard() {
   const [requests, setRequests] = useState<BookingRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [conflictCount, setConflictCount] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -118,6 +120,13 @@ export function BookingBoard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowEdit(true)}
+            className="flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-[12.5px] font-medium text-ink-soft hover:border-teal hover:text-teal"
+          >
+            <EditIcon className="h-3.5 w-3.5" />
+            Edit project
+          </button>
           <Link
             to={`/carnets?project=${project.id}`}
             className="flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-[12.5px] font-medium text-ink-soft hover:bg-off-white"
@@ -164,6 +173,11 @@ export function BookingBoard() {
         >
           Delete project
         </button>
+        {requests.length > 0 && (
+          <span className="text-[12px] text-ink-soft">
+            Can't delete — {requests.length} booking{requests.length === 1 ? '' : 's'} attached. Cancel instead.
+          </span>
+        )}
       </div>
 
       {actionError && (
@@ -262,6 +276,17 @@ export function BookingBoard() {
           onClose={() => setShowNew(false)}
           onCreated={() => {
             setShowNew(false)
+            reload()
+          }}
+        />
+      )}
+
+      {showEdit && (
+        <ProjectFormModal
+          project={project}
+          onClose={() => setShowEdit(false)}
+          onSaved={() => {
+            setShowEdit(false)
             reload()
           }}
         />

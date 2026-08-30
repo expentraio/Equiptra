@@ -181,10 +181,19 @@ func (a *API) CreateAllocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var br models.BookingRequest
-	err = a.DB.QueryRow(r.Context(), `SELECT id, product_id, date_out, date_in FROM booking_requests WHERE id = $1`, requestID).
-		Scan(&br.ID, &br.ProductID, &br.DateOut, &br.DateIn)
+	var projectStatus models.ProjectStatus
+	err = a.DB.QueryRow(r.Context(), `
+		SELECT br.id, br.product_id, br.date_out, br.date_in, pr.status
+		FROM booking_requests br
+		JOIN projects pr ON pr.id = br.project_id
+		WHERE br.id = $1`, requestID).
+		Scan(&br.ID, &br.ProductID, &br.DateOut, &br.DateIn, &projectStatus)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "booking request not found")
+		return
+	}
+	if projectStatus == models.ProjectStatusCancelled {
+		writeError(w, http.StatusBadRequest, "cannot allocate against a cancelled project")
 		return
 	}
 	if br.ProductID == nil {
