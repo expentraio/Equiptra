@@ -216,8 +216,8 @@ func (a *API) CreateBookingRequest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "project lookup failed")
 		return
 	}
-	if projectStatus == models.ProjectStatusCancelled {
-		writeError(w, http.StatusBadRequest, "cannot create a booking request for a cancelled project")
+	if projectStatus == models.ProjectStatusCancelled || projectStatus == models.ProjectStatusCompleted {
+		writeError(w, http.StatusBadRequest, "cannot create a booking request for a "+string(projectStatus)+" project")
 		return
 	}
 

@@ -192,8 +192,8 @@ func (a *API) CreateAllocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "booking request not found")
 		return
 	}
-	if projectStatus == models.ProjectStatusCancelled {
-		writeError(w, http.StatusBadRequest, "cannot allocate against a cancelled project")
+	if projectStatus == models.ProjectStatusCancelled || projectStatus == models.ProjectStatusCompleted {
+		writeError(w, http.StatusBadRequest, "cannot allocate against a "+string(projectStatus)+" project")
 		return
 	}
 	if br.ProductID == nil {
