@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Asset, ProductListItem } from '../types'
@@ -21,7 +21,36 @@ export function Products() {
   const [category, setCategory] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const scanInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleScanFile(file: File) {
+    setScanning(true)
+    setScanError(null)
+    const url = URL.createObjectURL(file)
+    // Decodes a single captured still image rather than a live video feed —
+    // works identically on iOS Safari and Android Chrome, unlike the native
+    // BarcodeDetector API which iOS doesn't implement at all. Lazy-loaded:
+    // ZXing adds ~470KB, not worth it in every page's bundle for a feature
+    // only used occasionally.
+    const { BrowserMultiFormatReader, NotFoundException } = await import('@zxing/library')
+    try {
+      const reader = new BrowserMultiFormatReader()
+      const result = await reader.decodeFromImageUrl(url)
+      setSearch(result.getText())
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        setScanError("Couldn't find a barcode in that photo — try again with it more centred and in focus.")
+      } else {
+        setScanError('Could not read that photo. Try again.')
+      }
+    } finally {
+      URL.revokeObjectURL(url)
+      setScanning(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -94,14 +123,34 @@ export function Products() {
             className="w-full bg-transparent text-[13.5px] outline-none"
           />
         </div>
+        <input
+          ref={scanInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void handleScanFile(file)
+            e.target.value = ''
+          }}
+        />
         <button
-          className="flex items-center gap-1.5 rounded-control bg-ink px-4 py-2.25 text-[13px] font-medium text-white hover:opacity-88"
+          onClick={() => scanInputRef.current?.click()}
+          disabled={scanning}
+          className="flex items-center gap-1.5 rounded-control bg-ink px-4 py-2.25 text-[13px] font-medium text-white hover:opacity-88 disabled:opacity-60"
           title="Scan a barcode via your phone camera"
         >
           <ScanIcon className="h-4 w-4" />
-          Scan tag
+          {scanning ? 'Reading…' : 'Scan tag'}
         </button>
       </div>
+
+      {scanError && (
+        <div className="mb-4.5 -mt-2.5 rounded-control border border-red-fill bg-red-fill px-3.5 py-2.5 text-[12.5px] font-medium text-red">
+          {scanError}
+        </div>
+      )}
 
       <div className="mb-5 flex flex-wrap gap-2">
         <Chip active={category === null} onClick={() => setCategory(null)}>

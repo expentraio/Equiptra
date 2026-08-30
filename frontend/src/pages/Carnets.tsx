@@ -127,7 +127,8 @@ function CarnetDetail({ projectId, onBack }: { projectId: number; onBack: () => 
       )}
 
       <div className="overflow-hidden rounded-card border border-border bg-surface">
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] border-collapse">
           <thead>
             <tr>
               {['Description', 'Qty', 'Weight', 'Value', 'Origin'].map((h) => (
@@ -161,6 +162,7 @@ function CarnetDetail({ projectId, onBack }: { projectId: number; onBack: () => 
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

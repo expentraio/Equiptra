@@ -110,7 +110,8 @@ export function ProductDetail() {
       </div>
 
       <div className="overflow-hidden rounded-card border border-border bg-surface">
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse">
           <thead>
             <tr>
               {['Asset', 'Serial Number', 'Location', 'Status', 'Current Booking', ''].map((h) => (
@@ -178,6 +179,7 @@ export function ProductDetail() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {selected && <AssetDetailPanel asset={selected} onClose={() => setSelected(null)} />}

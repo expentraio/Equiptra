@@ -119,7 +119,8 @@ export function BookingBoard() {
       )}
 
       <div className="overflow-hidden rounded-card border border-border bg-surface">
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse">
           <thead>
             <tr>
               {['Item', 'Qty', 'Dates', 'Status', ''].map((h) => (
@@ -188,6 +189,7 @@ export function BookingBoard() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showNew && (
