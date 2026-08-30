@@ -158,6 +158,26 @@ func (a *API) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
+func (a *API) CancelProject(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	p, err := scanProject(a.DB.QueryRow(r.Context(), `
+		UPDATE projects SET status = 'cancelled', updated_at = now() WHERE id = $1
+		RETURNING `+projectSelectCols, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "cancel failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
 func (a *API) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

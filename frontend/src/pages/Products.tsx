@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Asset, ProductListItem } from '../types'
-import { CATEGORIES } from '../constants'
+import { CategoryChips } from '../components/CategoryChips'
 import { ProductThumbnail } from '../components/ProductThumbnail'
 import { ProductFormModal } from '../components/ProductFormModal'
 import { SearchIcon, ScanIcon, PlusIcon } from '../components/icons'
@@ -152,15 +152,8 @@ export function Products() {
         </div>
       )}
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        <Chip active={category === null} onClick={() => setCategory(null)}>
-          All
-        </Chip>
-        {CATEGORIES.map((c) => (
-          <Chip key={c} active={category === c} onClick={() => setCategory(c)}>
-            {c}
-          </Chip>
-        ))}
+      <div className="mb-5">
+        <CategoryChips active={category} onChange={setCategory} />
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
@@ -203,18 +196,5 @@ export function Products() {
         />
       )}
     </div>
-  )
-}
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full border px-3.25 py-1.5 text-[12.5px] font-medium ${
-        active ? 'border-ink bg-ink text-white' : 'border-border bg-surface text-ink-soft'
-      }`}
-    >
-      {children}
-    </button>
   )
 }

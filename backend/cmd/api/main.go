@@ -101,6 +101,7 @@ func main() {
 			r.Get("/{id}", api.GetProject)
 			r.Put("/{id}", api.UpdateProject)
 			r.Delete("/{id}", api.DeleteProject)
+			r.Post("/{id}/cancel", api.CancelProject)
 			r.Get("/{id}/carnet", api.GetCarnetView)
 			r.Get("/{id}/carnet/export.csv", api.ExportCarnetCSV)
 			r.Get("/{id}/carnet/export.pdf", api.ExportCarnetPDF)

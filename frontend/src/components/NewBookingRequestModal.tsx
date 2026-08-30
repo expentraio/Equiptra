@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError } from '../lib/api'
 import type { BookingRequest, Product, Project } from '../types'
 import { CloseIcon } from './icons'
+import { CategoryChips } from './CategoryChips'
 
 function toDateInput(iso: string) {
   return iso.slice(0, 10)
@@ -18,6 +19,7 @@ export function NewBookingRequestModal({
 }) {
   const [mode, setMode] = useState<'product' | 'placeholder'>('product')
   const [productQuery, setProductQuery] = useState('')
+  const [productCategory, setProductCategory] = useState<string | null>(null)
   const [productResults, setProductResults] = useState<Product[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [placeholderDescription, setPlaceholderDescription] = useState('')
@@ -28,18 +30,21 @@ export function NewBookingRequestModal({
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!productQuery || selectedProduct) {
+    if ((!productQuery && !productCategory) || selectedProduct) {
       setProductResults([])
       return
     }
     const timeout = setTimeout(() => {
+      const params = new URLSearchParams()
+      if (productQuery) params.set('search', productQuery)
+      if (productCategory) params.set('category', productCategory)
       api
-        .get<Product[]>(`/products?search=${encodeURIComponent(productQuery)}`)
+        .get<Product[]>(`/products?${params.toString()}`)
         .then((results) => setProductResults(results.slice(0, 8)))
         .catch(() => {})
     }, 200)
     return () => clearTimeout(timeout)
-  }, [productQuery, selectedProduct])
+  }, [productQuery, productCategory, selectedProduct])
 
   async function submit() {
     if (mode === 'product' && !selectedProduct) {
@@ -116,6 +121,7 @@ export function NewBookingRequestModal({
                     onClick={() => {
                       setSelectedProduct(null)
                       setProductQuery('')
+                      setProductCategory(null)
                     }}
                     className="text-[12px] font-medium text-teal"
                   >
@@ -123,7 +129,9 @@ export function NewBookingRequestModal({
                   </button>
                 </div>
               ) : (
-                <div className="relative">
+                <div className="flex flex-col gap-2.5">
+                  <CategoryChips active={productCategory} onChange={setProductCategory} />
+                  <div className="relative">
                   <input
                     autoFocus
                     value={productQuery}
@@ -149,6 +157,7 @@ export function NewBookingRequestModal({
                       ))}
                     </div>
                   )}
+                  </div>
                 </div>
               )}
             </div>

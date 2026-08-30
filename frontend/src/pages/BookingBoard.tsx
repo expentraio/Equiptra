@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { api } from '../lib/api'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { api, ApiError } from '../lib/api'
 import type { AllocationWithConflicts, BookingRequest, Project } from '../types'
 import { AlertTriangleIcon, ChevronLeftIcon, FileIcon, PlusIcon } from '../components/icons'
 import { NewBookingRequestModal } from '../components/NewBookingRequestModal'
@@ -14,6 +14,14 @@ function formatDateRange(start: string, end: string) {
   return `${formatDate(start)} – ${formatDate(end)}`
 }
 
+const projectStatusPillClass: Record<Project['status'], string> = {
+  confirmed: 'bg-teal-fill text-teal',
+  tentative: 'bg-[#EDEBE4] text-ink-soft',
+  in_progress: 'bg-teal-fill text-teal',
+  completed: 'bg-[#EDEBE4] text-ink-soft',
+  cancelled: 'bg-red-fill text-red',
+}
+
 const statusPillClass: Record<BookingRequest['status'], string> = {
   draft: 'bg-[#EDEBE4] text-ink-soft',
   reserved: 'bg-[#EDEBE4] text-ink-soft',
@@ -25,12 +33,14 @@ const statusPillClass: Record<BookingRequest['status'], string> = {
 
 export function BookingBoard() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [project, setProject] = useState<Project | null>(null)
   const [requests, setRequests] = useState<BookingRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [conflictCount, setConflictCount] = useState(0)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   function reload() {
     if (!id) return
@@ -59,6 +69,30 @@ export function BookingBoard() {
     reload()
   }
 
+  async function cancelProject() {
+    if (!project) return
+    if (!confirm(`Cancel "${project.name}"? Its status will be set to cancelled.`)) return
+    setActionError(null)
+    try {
+      await api.post(`/projects/${project.id}/cancel`)
+      reload()
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Could not cancel project')
+    }
+  }
+
+  async function deleteProject() {
+    if (!project) return
+    if (!confirm(`Permanently delete "${project.name}"? This cannot be undone.`)) return
+    setActionError(null)
+    try {
+      await api.delete(`/projects/${project.id}`)
+      navigate('/projects')
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Could not delete project')
+    }
+  }
+
   if (loading && !project) {
     return <div className="text-[13px] text-ink-soft">Loading…</div>
   }
@@ -70,7 +104,14 @@ export function BookingBoard() {
     <div>
       <div className="mb-5.5 flex flex-wrap items-start justify-between gap-5">
         <div>
-          <h1 className="text-[21px] font-bold">{project.name}</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[21px] font-bold">{project.name}</h1>
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${projectStatusPillClass[project.status]}`}
+            >
+              {project.status.replace('_', ' ')}
+            </span>
+          </div>
           <p className="mt-1 text-[13px] text-ink-soft">
             {formatDateRange(project.start_date, project.end_date)}
             {project.client ? ` · Client: ${project.client}` : ''}
@@ -107,6 +148,29 @@ export function BookingBoard() {
           </button>
         </div>
       </div>
+
+      <div className="mb-5.5 flex flex-wrap items-center gap-4 border-t border-border pt-3.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[.05em] text-ink-soft">Project actions</span>
+        {project.status !== 'cancelled' && (
+          <button onClick={cancelProject} className="text-[12.5px] font-medium text-ink-soft hover:text-red">
+            Cancel project
+          </button>
+        )}
+        <button
+          onClick={deleteProject}
+          disabled={requests.length > 0}
+          title={requests.length > 0 ? 'Cannot delete a project with booking requests attached — use Cancel instead' : undefined}
+          className="text-[12.5px] font-medium text-ink-soft hover:text-red disabled:cursor-not-allowed disabled:text-[#C9C5BA] disabled:hover:text-[#C9C5BA]"
+        >
+          Delete project
+        </button>
+      </div>
+
+      {actionError && (
+        <div className="mb-4.5 rounded-control border border-red-fill bg-red-fill px-3.5 py-2.5 text-[13px] font-medium text-red">
+          {actionError}
+        </div>
+      )}
 
       {conflictCount > 0 && (
         <div className="mb-4.5 flex items-start gap-2.5 rounded-control border border-[#E8C5BE] bg-red-fill px-4 py-3 text-[13px] font-medium text-red">
