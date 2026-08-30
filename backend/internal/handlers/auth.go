@@ -23,15 +23,22 @@ func (a *API) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	err := a.DB.QueryRow(r.Context(),
-		`SELECT id, name, email, role, password_hash FROM users WHERE lower(email) = lower($1)`,
+		`SELECT id, name, email, role, active, password_hash FROM users WHERE lower(email) = lower($1)`,
 		req.Email,
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.PasswordHash)
+	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Active, &user.PasswordHash)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid email or password")
+		return
+	}
+
+	// Same generic message as a bad password — don't reveal that a disabled
+	// account exists.
+	if !user.Active {
 		writeError(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
@@ -64,9 +71,9 @@ func (a *API) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	err := a.DB.QueryRow(r.Context(),
-		`SELECT id, name, email, role FROM users WHERE id = $1`,
+		`SELECT id, name, email, role, active FROM users WHERE id = $1`,
 		claims.UserID,
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Role)
+	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Active)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "user not found")
 		return

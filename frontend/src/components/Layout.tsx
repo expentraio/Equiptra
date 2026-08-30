@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { GridIcon, FolderIcon, FileIcon, LogOutIcon } from './icons'
+import { GridIcon, FolderIcon, FileIcon, UsersIcon, LogOutIcon } from './icons'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
 
 export function Layout() {
   const { user, logout } = useAuth()
+  const items = user?.role === 'admin' ? [...navItems, { to: '/users', label: 'Users', icon: UsersIcon }] : navItems
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -27,7 +28,7 @@ export function Layout() {
           <span className="text-[11px] text-ink-soft">Equipment management, simplified.</span>
         </div>
 
-        {navItems.map(({ to, label, icon: ItemIcon }) => (
+        {items.map(({ to, label, icon: ItemIcon }) => (
           <NavLink
             key={to}
             to={to}

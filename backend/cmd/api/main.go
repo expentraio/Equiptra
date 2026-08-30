@@ -131,6 +131,16 @@ func main() {
 			r.Post("/", api.CreateServiceRecord)
 			r.Put("/{id}", api.UpdateServiceRecord)
 		})
+
+		// Account/login management is more sensitive than products/assets, so
+		// unlike those this whole resource stays admin-only.
+		r.Route("/users", func(r chi.Router) {
+			r.Use(middleware.RequireAdmin)
+			r.Get("/", api.ListUsers)
+			r.Post("/", api.CreateUser)
+			r.Patch("/{id}", api.UpdateUser)
+			r.Delete("/{id}", api.DeleteUser)
+		})
 	})
 
 	// Render, Fly, and most PaaS platforms inject PORT and require the app

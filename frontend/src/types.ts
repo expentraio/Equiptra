@@ -188,3 +188,14 @@ export interface CurrentUser {
   email: string
   role: UserRole
 }
+
+export interface User {
+  id: number
+  name: string
+  email: string
+  role: UserRole
+  active: boolean
+  created_at: string
+  updated_at: string
+  has_allocation_history: boolean
+}
