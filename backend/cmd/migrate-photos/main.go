@@ -1,8 +1,16 @@
 // Command migrate-photos bulk-uploads the CurrentRMS product photos already
-// pulled locally (brief §7) to S3 and populates products.image_url,
-// matching each file to its product by the product_id embedded in the
-// manifest/filename (which is the product's legacy_id in this app).
-// Safe to re-run — re-uploads and overwrites image_url unconditionally.
+// pulled locally (see docs/equiptra-photo-upload-addendum.md) to Supabase
+// Storage's product-photos bucket via its native REST API, and populates
+// products.image_url, matching each file to its product by the product_id
+// embedded in the manifest/filename (which is the product's legacy_id in
+// this app). Safe to re-run — re-uploads and overwrites image_url
+// unconditionally, and the storage upload itself uses x-upsert so retrying
+// a file just replaces the same object rather than erroring or duplicating.
+//
+// Use -limit to run a small sample before committing to the full batch —
+// this is a one-time operation against production data and not cleanly
+// undoable, so a sample run confirming the path convention and matching
+// logic look right is worth doing first.
 package main
 
 import (
@@ -20,6 +28,8 @@ import (
 	"equiptra/internal/storage"
 )
 
+const productPhotosBucket = "product-photos"
+
 var extToContentType = map[string]string{
 	".jpg":  "image/jpeg",
 	".jpeg": "image/jpeg",
@@ -31,6 +41,7 @@ var extToContentType = map[string]string{
 func main() {
 	manifestPath := flag.String("manifest", "../Photo Dump/product_photos/_manifest.csv", "path to the photo manifest CSV")
 	photosDir := flag.String("photos-dir", "", "directory containing the photo files (default: manifest's directory)")
+	limit := flag.Int("limit", 0, "only process the first N 'downloaded' rows — 0 means no limit (run the full batch)")
 	flag.Parse()
 
 	dir := *photosDir
@@ -45,12 +56,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	s3Client, err := storage.NewClient(ctx)
-	if err != nil {
-		log.Fatalf("s3 client: %v", err)
-	}
-	if s3Client == nil {
-		log.Fatal("S3_BUCKET is not set — nowhere to upload to")
+	supabaseClient := storage.NewSupabaseClient()
+	if supabaseClient == nil {
+		log.Fatal("SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY not set — nowhere to upload to")
 	}
 
 	f, err := os.Open(*manifestPath)
@@ -72,13 +80,18 @@ func main() {
 		colIdx[strings.TrimSpace(h)] = i
 	}
 
-	var uploaded, notFound, skipped int
+	var uploaded, notFound, skipped, processed int
 	for _, row := range rows[1:] {
 		status := row[colIdx["status"]]
 		if status != "downloaded" {
 			skipped++
 			continue
 		}
+		if *limit > 0 && processed >= *limit {
+			break
+		}
+		processed++
+
 		legacyIDStr := row[colIdx["product_id"]]
 		filename := row[colIdx["filename"]]
 		legacyID, err := strconv.Atoi(legacyIDStr)
@@ -103,15 +116,18 @@ func main() {
 			continue
 		}
 
-		key := fmt.Sprintf("products/%d%s", legacyID, ext)
-		getURL, err := s3Client.PutObject(ctx, key, contentType, body)
+		// {product_id}{ext} in product-photos — same convention as the live
+		// upload endpoint, just keyed by legacy_id since that's what these
+		// filenames carry.
+		path := fmt.Sprintf("%d%s", legacyID, ext)
+		publicURL, err := supabaseClient.UploadObject(ctx, productPhotosBucket, path, contentType, body)
 		if err != nil {
 			log.Printf("product legacy_id=%d upload failed: %v", legacyID, err)
 			skipped++
 			continue
 		}
 
-		tag, err := pool.Exec(ctx, `UPDATE products SET image_url = $1, updated_at = now() WHERE legacy_id = $2`, getURL, legacyID)
+		tag, err := pool.Exec(ctx, `UPDATE products SET image_url = $1, updated_at = now() WHERE legacy_id = $2`, publicURL, legacyID)
 		if err != nil {
 			log.Printf("product legacy_id=%d db update failed: %v", legacyID, err)
 			skipped++
@@ -122,6 +138,7 @@ func main() {
 			notFound++
 			continue
 		}
+		log.Printf("product legacy_id=%d: uploaded -> %s", legacyID, publicURL)
 		uploaded++
 	}
 

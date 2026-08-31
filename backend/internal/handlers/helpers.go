@@ -11,8 +11,10 @@ import (
 
 type API struct {
 	DB *pgxpool.Pool
-	// S3 is nil when the product-photo feature is disabled (S3_BUCKET unset) — see storage.NewClient.
-	S3 *storage.Client
+	// Supabase is nil when the product-photo feature is disabled
+	// (SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY unset) — see
+	// storage.NewSupabaseClient.
+	Supabase *storage.SupabaseClient
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

@@ -26,15 +26,12 @@ func main() {
 	}
 	defer pool.Close()
 
-	s3Client, err := storage.NewClient(ctx)
-	if err != nil {
-		log.Fatalf("s3 client: %v", err)
-	}
-	if s3Client == nil {
-		log.Printf("S3_BUCKET not set — product photo uploads are disabled")
+	supabaseClient := storage.NewSupabaseClient()
+	if supabaseClient == nil {
+		log.Printf("SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY not set — product photo uploads are disabled")
 	}
 
-	api := &handlers.API{DB: pool, S3: s3Client}
+	api := &handlers.API{DB: pool, Supabase: supabaseClient}
 
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Logger)
@@ -91,7 +88,7 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAdmin)
 				r.Delete("/{id}", api.DeleteProduct)
-				r.Post("/{id}/photo/presign", api.PresignProductPhoto)
+				r.Post("/{id}/photo", api.UploadProductPhoto)
 			})
 		})
 

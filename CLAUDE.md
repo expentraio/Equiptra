@@ -11,7 +11,7 @@ Equiptra is LDMtv's internal broadcast-equipment asset/project/booking tracker, 
 - Backend: Go (`backend/`), chi router, pgx/v5, Postgres — deploys to Render
 - Frontend: React 19 + TypeScript + Tailwind v4 (`frontend/`), Vite, react-router-dom v7 — deploys to Vercel
 - Database: Supabase-hosted Postgres
-- File storage: Supabase Storage (S3-compatible), via `internal/storage` — feature is fully disabled if `S3_BUCKET` is unset
+- File storage: Supabase Storage's native REST API (bearer token, not the S3-compatible endpoint — that failed with SignatureDoesNotMatch), via `internal/storage/supabase.go` — feature is fully disabled if `SUPABASE_PROJECT_REF`/`SUPABASE_SERVICE_ROLE_KEY` are unset
 - Auth: email/password + bcrypt, JWT session cookie (`equiptra_session`), `admin`/`standard` roles
 
 ## Commands
@@ -45,7 +45,7 @@ Local Postgres setup, CSV migration tooling (`cmd/migrate`, `cmd/migrate-photos`
 
 ### Backend request handling conventions
 
-- Every handler is a method on `*API` (`internal/handlers/helpers.go`), holding `DB *pgxpool.Pool` and `S3 *storage.Client`.
+- Every handler is a method on `*API` (`internal/handlers/helpers.go`), holding `DB *pgxpool.Pool` and `Supabase *storage.SupabaseClient`.
 - `readJSON` uses `json.NewDecoder(...).DisallowUnknownFields()` — a strict decode. Spreading a full GET response into a PUT/PATCH body (a natural React pattern) will 400 if that object carries any field the write struct doesn't declare (e.g. read-only fields like `id`/`created_at`). Write structs list only what's actually writable; construct payloads explicitly on the frontend rather than object-spreading a fetched entity.
 - Auth is `internal/middleware`: `RequireAuth` parses the `equiptra_session` JWT cookie (HS256, `JWT_SECRET` env, insecure dev fallback if unset) into request context; `RequireAdmin` chains after it and checks `role == admin`. Route groups in `cmd/api/main.go` show the actual admin-gating: products/assets have create/edit open to any authenticated user (delete + photo upload admin-only) as a **deliberate, temporary decision** — see README "Still open" section before changing this. `/users` is entirely admin-gated (account/login management is more sensitive than inventory).
 - Deactivating a user only blocks *future* logins (`Login` checks `users.active`) — an already-issued JWT stays valid for its normal life; there's no per-request DB check killing live sessions on deactivation.
@@ -64,4 +64,4 @@ Local Postgres setup, CSV migration tooling (`cmd/migrate`, `cmd/migrate-photos`
 
 ## Known open items
 
-Documented in more detail in README's "Still open" section: AWS S3 deployment (currently local MinIO / Supabase Storage only), the Monday.com → `service_records` Lambda write path (needs its own credential, not the user JWT), carnet/delivery-note templates need sign-off against real historical documents, no Postgres backup/retention policy configured, and role-based permissions are intentionally wide open for products/assets pending real usage data.
+Documented in more detail in README's "Still open" section: carnet/delivery-note templates need sign-off against real historical documents, no Postgres backup/retention policy configured, and role-based permissions are intentionally wide open for products/assets pending real usage data.

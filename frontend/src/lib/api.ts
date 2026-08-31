@@ -9,11 +9,15 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // FormData bodies (file uploads) need the browser to set its own
+  // Content-Type with a boundary — setting application/json here would
+  // break multipart parsing server-side.
+  const isFormData = init?.body instanceof FormData
   const res = await fetch(`/api${path}`, {
     ...init,
     credentials: 'include',
     headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...init?.headers,
     },
   })
@@ -41,4 +45,9 @@ export const api = {
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  uploadFile: <T>(path: string, fieldName: string, file: File) => {
+    const formData = new FormData()
+    formData.append(fieldName, file)
+    return request<T>(path, { method: 'POST', body: formData })
+  },
 }

@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 import type { Product } from '../types'
 import { CATEGORIES } from '../constants'
-import { CloseIcon } from './icons'
+import { CloseIcon, UploadIcon } from './icons'
+import { ProductThumbnail } from './ProductThumbnail'
 
 export function ProductFormModal({
   product,
@@ -13,6 +15,7 @@ export function ProductFormModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { user } = useAuth()
   const isEdit = !!product
   const [name, setName] = useState(product?.name ?? '')
   const [category, setCategory] = useState(product?.category ?? '')
@@ -22,8 +25,26 @@ export function ProductFormModal({
   const [barcode, setBarcode] = useState(product?.barcode ?? '')
   const [description, setDescription] = useState(product?.description ?? '')
   const [isAccessory, setIsAccessory] = useState(product?.is_accessory ?? false)
+  const [imageUrl, setImageUrl] = useState(product?.image_url)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handlePhotoSelected(file: File) {
+    if (!product) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const updated = await api.uploadFile<Product>(`/products/${product.id}/photo`, 'photo', file)
+      setImageUrl(updated.image_url)
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -38,9 +59,10 @@ export function ProductFormModal({
         country_of_origin_code: countryOfOrigin.trim() === '' ? null : countryOfOrigin.trim().toUpperCase(),
         is_accessory: isAccessory,
         barcode: barcode || null,
-        // Not exposed in this simple form — preserve whatever the product
-        // already had (photo upload has its own flow; active defaults on).
-        image_url: product?.image_url ?? null,
+        // Photo upload has its own dedicated flow (separate endpoint) — this
+        // just preserves whatever's currently set, including a photo
+        // uploaded earlier in this same modal session.
+        image_url: imageUrl ?? null,
         description: description || null,
         active: product?.active ?? true,
       }
@@ -72,6 +94,35 @@ export function ProductFormModal({
         </div>
 
         <div className="flex flex-col gap-3.5">
+          {isEdit && user?.role === 'admin' && (
+            <div className="flex items-center gap-3.5">
+              <ProductThumbnail url={imageUrl} size="panel" />
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void handlePhotoSelected(file)
+                    e.target.value = ''
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1.5 rounded-control border border-border px-2.5 py-1.5 text-[11.5px] font-medium text-ink-soft hover:border-teal hover:text-teal disabled:opacity-60"
+                >
+                  <UploadIcon className="h-3.5 w-3.5" />
+                  {uploading ? 'Uploading…' : imageUrl ? 'Replace photo' : 'Upload photo'}
+                </button>
+                {uploadError && <div className="mt-1 text-[11.5px] font-medium text-red">{uploadError}</div>}
+              </div>
+            </div>
+          )}
+
           <label className="flex flex-col gap-1.5 text-[13px] font-medium">
             Name
             <input

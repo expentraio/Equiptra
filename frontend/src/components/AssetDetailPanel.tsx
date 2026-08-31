@@ -51,26 +51,8 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
     setUploading(true)
     setUploadError(null)
     try {
-      const { put_url, get_url } = await api.post<{ put_url: string; get_url: string }>(
-        `/products/${asset.product_id}/photo/presign`,
-        { content_type: file.type },
-      )
-      const putRes = await fetch(put_url, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
-      if (!putRes.ok) throw new Error('Upload to storage failed')
-      const product = await api.get<Product>(`/products/${asset.product_id}`)
-      await api.put(`/products/${asset.product_id}`, {
-        name: product.name,
-        category: product.category ?? null,
-        manufacturer: product.manufacturer ?? null,
-        weight_kg: product.weight_kg ?? null,
-        country_of_origin_code: product.country_of_origin_code ?? null,
-        is_accessory: product.is_accessory,
-        barcode: product.barcode ?? null,
-        image_url: get_url,
-        description: product.description ?? null,
-        active: product.active,
-      })
-      setPhotoUrl(get_url)
+      const product = await api.uploadFile<Product>(`/products/${asset.product_id}/photo`, 'photo', file)
+      setPhotoUrl(product.image_url)
     } catch (err) {
       setUploadError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Upload failed')
     } finally {

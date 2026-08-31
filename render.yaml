@@ -17,15 +17,11 @@ services:
         value: https://equiptra-smoky.vercel.app
       - key: COOKIE_SECURE
         value: "true"
-      - key: S3_BUCKET
-        sync: false
-      - key: AWS_REGION
-        sync: false
-      - key: S3_ENDPOINT_URL
-        sync: false # Supabase Storage's S3-compatible endpoint
-      - key: S3_PUBLIC_BASE_URL
-        sync: false # Supabase Storage's public object URL base
-      - key: AWS_ACCESS_KEY_ID
-        sync: false # Supabase Storage S3 access key (not an AWS account)
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
+      # Product photo uploads — Supabase Storage's native REST API (bearer
+      # token, no request signing), replacing an earlier S3-compatible-client
+      # attempt that failed with SignatureDoesNotMatch. See
+      # docs/equiptra-photo-upload-addendum.md.
+      - key: SUPABASE_PROJECT_REF
+        sync: false # the subdomain of https://{ref}.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # server-side only — never sent to the frontend, never logged

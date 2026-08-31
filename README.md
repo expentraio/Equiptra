@@ -10,7 +10,7 @@ core of the data model.
 - Backend: Go (`backend/`), Postgres, chi router, pgx — deploying to Render
 - Frontend: React + TypeScript + Tailwind v4 (`frontend/`), Vite — deploying to Vercel
 - Database: Supabase-hosted Postgres (was local-only during initial build)
-- File storage: Supabase Storage (S3-compatible) for product photos
+- File storage: Supabase Storage's native REST API (bearer token, not the S3-compatible endpoint) for product photos
 - Auth: email/password, JWT session cookie, `admin`/`standard` roles — unchanged by the hosting move
 
 ## Deployment (Vercel + Render + Supabase)
@@ -70,56 +70,64 @@ npm run dev
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | CORS allow-origin |
 | `LISTEN_ADDR` | `:8080` | |
 | `COOKIE_SECURE` | unset (`false`) | set `true` behind HTTPS |
-| `S3_BUCKET` | unset | product-photo uploads (brief §7) are disabled entirely if unset |
-| `AWS_REGION` | `us-east-1` | |
-| `S3_ENDPOINT_URL` | unset | set for a non-AWS S3-compatible endpoint (MinIO for local dev — see below); leave unset for real AWS S3 |
-| `S3_PUBLIC_BASE_URL` | derived | override if photos are served through a CDN/custom domain rather than the bucket's own URL |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | standard AWS SDK credential chain (env vars, shared config, or an instance/task role in AWS) |
+| `SUPABASE_PROJECT_REF` | unset | product-photo uploads are disabled entirely if unset — the subdomain of `https://{ref}.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | unset | server-side only — never sent to the frontend, never logged |
 
-## Product photos (brief §7)
+## Product photos
 
-Fully built and tested end-to-end (presign → browser PUT → confirm) against
-a **local MinIO** server standing in for S3, since this session has no real
-AWS credentials. The same code talks to real AWS S3 unchanged — MinIO was
-only for verification.
+**Replaces an earlier S3-compatible-client approach** (pointing the AWS S3
+SDK at Supabase Storage's S3-compatible endpoint), which failed with
+`SignatureDoesNotMatch` against real Supabase Storage across multiple SDKs,
+credential pairs, and regions — consistent with a SigV4 compatibility gap
+in Supabase's S3 shim, not a config mistake. See
+`docs/equiptra-photo-upload-addendum.md` for the full writeup. The fix:
+Supabase Storage also exposes a **native REST API** that takes a plain
+bearer token — no request signing, so the whole problem class goes away.
+`internal/storage/supabase.go` is a small wrapper around it (no SDK
+dependency at all).
+
+The Go backend uploads on the frontend's behalf — the browser never sees
+`SUPABASE_SERVICE_ROLE_KEY`:
+
+1. `POST /api/products/{id}/photo` (admin-only, multipart) validates file
+   type (jpg/png/webp) and size (5MB cap) before doing anything else.
+2. The backend forwards the file to Supabase Storage's REST API
+   (`POST /storage/v1/object/product-photos/{id}.{ext}`, `x-upsert: true`
+   so a re-upload replaces rather than errors) using the service-role key.
+3. On success, `products.image_url` is set to the public URL and the
+   updated product is returned.
+
+Requires a **`product-photos` bucket, set to public**, created manually in
+the Supabase Storage dashboard — nothing in this repo creates or configures
+buckets.
 
 ```bash
-# Local dev / testing, using MinIO as an S3 stand-in
-brew install minio/stable/minio minio-mc
-minio server /tmp/minio-data --address :9000 --console-address :9001 &
-mc alias set local http://127.0.0.1:9000 minioadmin minioadmin
-mc mb local/equiptra-product-photos
-mc anonymous set download local/equiptra-product-photos   # public GET, presigned-only PUT
-
-# Run the API pointed at it
-S3_BUCKET=equiptra-product-photos S3_ENDPOINT_URL=http://127.0.0.1:9000 \
-AWS_REGION=us-east-1 AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin \
-go run ./cmd/api
+# Local dev/testing — needs a real SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run ./cmd/api
 ```
 
-**To switch to real AWS S3**, once you can provide credentials/access:
-1. Create a bucket (`aws s3 mb s3://equiptra-product-photos`), block public
-   ACLs but allow public `GetObject` via a bucket policy (or front it with
-   CloudFront), and set CORS to allow `PUT` from your frontend's origin.
-2. Create an IAM user/role with `s3:PutObject`/`s3:GetObject` on that bucket
-   and set `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (or attach the role if
-   running on ECS/EC2 — then those two vars can be left unset).
-3. Set `S3_BUCKET` and `AWS_REGION`; leave `S3_ENDPOINT_URL` unset.
-4. Run the one-off photo migration (idempotent, safe to re-run):
-   ```bash
-   cd backend/cmd/migrate-photos
-   DATABASE_URL=... S3_BUCKET=... AWS_REGION=... go run . \
-     -manifest "/path/to/Photo Dump/product_photos/_manifest.csv" \
-     -photos-dir "/path/to/Photo Dump/product_photos"
-   ```
+**One-off backfill** of the 693 CurrentRMS photos already extracted locally
+(`Photo Dump/product_photos/`, see `extract_photos.py`) to real photos in
+storage:
 
-Already verified locally: 693/693 manifest-listed photos upload and become
-publicly fetchable; the 50 `no_photo` rows are correctly skipped; admin
-users get a "Replace photo" control in the asset detail panel (presign →
-direct browser upload → product record updated); assets without a photo
-show a generic placeholder icon (not 16 bespoke per-category icons, as
-originally suggested — the category name is already shown as text right
-next to every thumbnail, so a per-category icon would be redundant).
+```bash
+cd backend/cmd/migrate-photos
+# Sample run first — this is one-time and not cleanly undoable
+SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run . -limit 3 \
+  -manifest "/path/to/Photo Dump/product_photos/_manifest.csv" \
+  -photos-dir "/path/to/Photo Dump/product_photos"
+# Full batch once the sample looks right
+SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run . \
+  -manifest "/path/to/Photo Dump/product_photos/_manifest.csv" \
+  -photos-dir "/path/to/Photo Dump/product_photos"
+```
+
+Safe to re-run — `x-upsert` on the storage side means retrying a file just
+overwrites the same object, and the DB update is unconditional. Products
+without a photo (the ~50 `no_photo` rows, plus anything created after) show
+a generic placeholder icon — not 16 bespoke per-category icons as
+originally suggested — since the category name is already shown as text
+right next to every thumbnail, so a per-category icon would be redundant.
 
 ## Data model notes worth knowing
 
@@ -224,8 +232,6 @@ link; an admin resetting someone directly is the practical equivalent at
 
 ## Still open (not built yet)
 
-- **AWS deployment.** Built and verified against local Postgres only — no
-  RDS/ECS/Lambda provisioning has been done. Needs your AWS access.
 - ~~Monday.com Lambda → `service_records` write step~~ — **retired, and the
   AWS side is fully decommissioned.** Correction to an earlier assumption
   here: this wasn't unfinished — it was a real, working integration
