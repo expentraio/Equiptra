@@ -151,14 +151,57 @@ next to every thumbnail, so a per-category icon would be redundant).
   mask composited into a transparent PNG) since no separate logo file was
   supplied.
 
+## Fault reporting & Services tab
+
+Replaces the old Monday.com relay — see `equiptra-build-brief-fault-workflow-addendum.md`
+for the original spec. `service_records` (from `0001_init.sql`) was extended
+rather than replaced — migration `0003_fault_reporting.sql` adds `in_progress`
+to the existing `service_status` enum and `field_report` to `service_source`
+(both existing enums, not new ones), plus `reporter_user_id`/`reporter_name`/
+`reporter_email`/`resolved_by` columns. `under_investigation` and
+`monday_report` are left in place, unused, for historic rows.
+
+- **Two ways a fault gets logged**: automatically at check-in when
+  `damage_flag` is set (`CheckinAllocation`, unchanged except it now also
+  stamps `reporter_user_id` to the checking-in user), or manually via
+  `POST /api/public/fault-reports` — the public, no-login form at
+  `/report-fault`. That route and `GET /api/public/assets` (the form's asset
+  lookup) sit outside `RequireAuth` behind `OptionalAuth` instead (best-effort
+  cookie parse — auto-fills `reporter_user_id` for a staff member who happens
+  to have a session, otherwise requires `reporter_name`/`reporter_email`) and
+  a small in-memory per-IP rate limiter (`middleware.RateLimit`, 20 req/min) —
+  the only unauthenticated write path in the app.
+- **Availability**: `assetHasOpenFault` (`service_records.go`) is an inline Go
+  helper, not a SQL view — matches this codebase's existing convention
+  (`computeShortage`, `findAllocationConflicts`) rather than introducing the
+  schema's first view. `CreateAllocation` hard-blocks (no override) any asset
+  with an open/in_progress fault; `assets.has_open_fault` and
+  `products.available_units` (which now subtracts faulted-but-active assets,
+  same treatment as an active allocation) surface the same check for display.
+  Forward-looking only — an existing allocation is never retroactively
+  affected.
+- **Status lifecycle** (`open → in_progress → resolved`) is driven by staff
+  from the Services tab (`PUT /api/service-records/{id}`); a DB trigger
+  auto-stamps the existing `resolved_date` column on the transition to
+  `resolved` (no new timestamp column), while `resolved_by` is set by the
+  handler (the trigger has no notion of which user is asking).
+- The `chk_service_records_reporter` CHECK constraint was added `NOT VALID` —
+  enforced on new/updated rows only, since pre-existing check-in-damage rows
+  predate reporter tracking and would otherwise fail a validated constraint
+  on migration.
+
 ## Still open (not built yet)
 
 - **AWS deployment.** Built and verified against local Postgres only — no
   RDS/ECS/Lambda provisioning has been done. Needs your AWS access.
-- **Monday.com Lambda → `service_records` write step.** `POST
-  /api/service-records` exists (for the `monday_report` source) but
-  currently needs the same user JWT as the rest of the app. The Lambda will
-  need its own credential — flag your preference before wiring it up.
+- ~~Monday.com Lambda → `service_records` write step~~ — **retired.** The
+  Monday.com relay is gone; fault reporting now goes through Equiptra
+  directly (automatic at check-in damage, or the public `/report-fault` form
+  for staff and freelancers alike — see "Fault reporting & Services tab"
+  below). No AWS/Lambda code for this ever existed in this repo to remove;
+  if a Lambda/trigger/IAM statement/Secrets entry exists in the AWS console
+  from an earlier manual setup, that's on you to check and clean up
+  separately — nothing here can see or touch it.
 - **Carnet PDF template.** Functional general-list table but per the brief
   needs checking against a real past carnet before first live use.
 - **Delivery note layout.** Matches the reference document's fields, table
