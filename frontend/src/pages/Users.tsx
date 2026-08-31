@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext'
 import type { User, UserRole } from '../types'
 import { PlusIcon } from '../components/icons'
 import { NewUserModal } from '../components/NewUserModal'
+import { AdminResetPasswordModal } from '../components/AdminResetPasswordModal'
 
 export function Users() {
   const { user: currentUser } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
+  const [resetTarget, setResetTarget] = useState<User | null>(null)
   const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null)
 
   function reload() {
@@ -112,6 +114,11 @@ export function Users() {
                       >
                         {u.active ? 'active' : 'inactive'}
                       </span>
+                      {u.must_change_password && (
+                        <span className="ml-1.5 rounded-full bg-amber-fill px-2.5 py-1 text-[11px] font-semibold text-amber">
+                          must reset
+                        </span>
+                      )}
                     </td>
                     <td className="border-b border-border px-4 py-3.25 text-right text-[12px]">
                       <div className="flex items-center justify-end gap-3">
@@ -122,6 +129,14 @@ export function Users() {
                           className="font-medium text-ink-soft hover:text-ink disabled:cursor-not-allowed disabled:text-[#C9C5BA] disabled:hover:text-[#C9C5BA]"
                         >
                           {u.active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => setResetTarget(u)}
+                          disabled={isSelf}
+                          title={isSelf ? 'Use Settings to change your own password' : undefined}
+                          className="font-medium text-ink-soft hover:text-ink disabled:cursor-not-allowed disabled:text-[#C9C5BA] disabled:hover:text-[#C9C5BA]"
+                        >
+                          Reset password
                         </button>
                         <button
                           onClick={() => void deleteUser(u)}
@@ -160,6 +175,17 @@ export function Users() {
           onClose={() => setShowNew(false)}
           onCreated={() => {
             setShowNew(false)
+            reload()
+          }}
+        />
+      )}
+
+      {resetTarget && (
+        <AdminResetPasswordModal
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
+          onDone={() => {
+            setResetTarget(null)
             reload()
           }}
         />

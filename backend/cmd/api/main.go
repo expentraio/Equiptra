@@ -75,6 +75,7 @@ func main() {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
+		r.Use(middleware.RequirePasswordSet)
 
 		r.Get("/me", api.Me)
 
@@ -148,13 +149,20 @@ func main() {
 		})
 
 		// Account/login management is more sensitive than products/assets, so
-		// unlike those this whole resource stays admin-only.
+		// unlike those this resource stays admin-only — except changing your
+		// own password, which any authenticated user (including a
+		// must_change_password-restricted session) can do.
 		r.Route("/users", func(r chi.Router) {
-			r.Use(middleware.RequireAdmin)
-			r.Get("/", api.ListUsers)
-			r.Post("/", api.CreateUser)
-			r.Patch("/{id}", api.UpdateUser)
-			r.Delete("/{id}", api.DeleteUser)
+			r.Patch("/me/password", api.ChangeOwnPassword)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireAdmin)
+				r.Get("/", api.ListUsers)
+				r.Post("/", api.CreateUser)
+				r.Patch("/{id}", api.UpdateUser)
+				r.Patch("/{id}/password", api.AdminResetPassword)
+				r.Delete("/{id}", api.DeleteUser)
+			})
 		})
 	})
 

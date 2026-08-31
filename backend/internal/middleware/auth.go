@@ -21,6 +21,11 @@ const userContextKey contextKey = "user"
 type Claims struct {
 	UserID int64           `json:"uid"`
 	Role   models.UserRole `json:"role"`
+	// MustChangePassword mirrors users.must_change_password at the moment
+	// the token was issued — RequirePasswordSet uses it to restrict a
+	// forced-reset session to only the self-service password-change
+	// endpoint until a new password is set.
+	MustChangePassword bool `json:"must_change_password"`
 	jwt.RegisteredClaims
 }
 
@@ -32,10 +37,11 @@ func jwtSecret() []byte {
 	return []byte(secret)
 }
 
-func IssueToken(userID int64, role models.UserRole) (string, error) {
+func IssueToken(userID int64, role models.UserRole, mustChangePassword bool) (string, error) {
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
+		UserID:             userID,
+		Role:               role,
+		MustChangePassword: mustChangePassword,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -97,6 +103,25 @@ func RequireAuth(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), userContextKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// RequirePasswordSet is the enforced side of the forced "set a new
+// password" screen — not just a frontend redirect. Chained right after
+// RequireAuth, it blocks every /api route except the two a locked session
+// still needs (fetching who's logged in, and setting the new password
+// itself) whenever the caller's token was issued with
+// must_change_password = true. A normal session (the common case) is
+// completely unaffected.
+func RequirePasswordSet(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := UserFromContext(r.Context())
+		exempt := r.URL.Path == "/api/me" || r.URL.Path == "/api/users/me/password"
+		if ok && claims.MustChangePassword && !exempt {
+			http.Error(w, `{"error":"password change required","must_change_password":true}`, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

@@ -7,6 +7,7 @@ interface AuthContextValue {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  updateUser: (user: CurrentUser) => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -33,7 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
+  // Used after ChangeOwnPassword, which already returns the full updated
+  // user (must_change_password cleared) alongside a fresh session cookie —
+  // no need for a separate /me round-trip.
+  function updateUser(next: CurrentUser) {
+    setUser(next)
+  }
+
+  return <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { GridIcon, FolderIcon, FileIcon, UsersIcon, WrenchIcon, LogOutIcon } from './icons'
+import { GridIcon, FolderIcon, FileIcon, UsersIcon, WrenchIcon, SettingsIcon, LogOutIcon } from './icons'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
@@ -53,13 +53,22 @@ export function Layout() {
             <div className="truncate text-[13px] font-medium">{user?.name}</div>
             <div className="truncate text-[11px] text-ink-soft">{user?.role}</div>
           </div>
-          <button
-            onClick={() => void logout()}
-            className="shrink-0 rounded-lg p-1.5 text-ink-soft hover:bg-off-white hover:text-ink"
-            title="Log out"
-          >
-            <LogOutIcon className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <NavLink
+              to="/settings"
+              className="rounded-lg p-1.5 text-ink-soft hover:bg-off-white hover:text-ink"
+              title="Settings"
+            >
+              <SettingsIcon className="h-4 w-4" />
+            </NavLink>
+            <button
+              onClick={() => void logout()}
+              className="rounded-lg p-1.5 text-ink-soft hover:bg-off-white hover:text-ink"
+              title="Log out"
+            >
+              <LogOutIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </aside>
 

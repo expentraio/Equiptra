@@ -219,12 +219,13 @@ type ServiceRecord struct {
 }
 
 type User struct {
-	ID           int64     `json:"id"`
-	Name         string    `json:"name"`
-	Email        string    `json:"email"`
-	Role         UserRole  `json:"role"`
-	Active       bool      `json:"active"`
-	PasswordHash string    `json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID                 int64     `json:"id"`
+	Name               string    `json:"name"`
+	Email              string    `json:"email"`
+	Role               UserRole  `json:"role"`
+	Active             bool      `json:"active"`
+	MustChangePassword bool      `json:"must_change_password"`
+	PasswordHash       string    `json:"-"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }

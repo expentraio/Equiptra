@@ -190,6 +190,38 @@ to the existing `service_status` enum and `field_report` to `service_source`
   predate reporter tracking and would otherwise fail a validated constraint
   on migration.
 
+## Password management
+
+Self-service change (any logged-in user) plus admin-initiated reset for a
+locked-out teammate — see `docs/equiptra-password-management-addendum.md`.
+No email/SMTP infrastructure exists, so there's no "forgot password" email
+link; an admin resetting someone directly is the practical equivalent at
+4-user scale.
+
+- **`users.must_change_password`** (migration `0004_must_change_password.sql`)
+  drives a forced-reset session. Set to `true` by `PATCH /api/users/{id}/password`
+  (admin-only — sets a temporary password the admin types in and relays
+  directly, no email); cleared automatically by `PATCH /api/users/me/password`
+  once the affected user sets their own new password.
+- **A third auth state, enforced server-side, not just in the UI**: `Claims`
+  carries `must_change_password` from the JWT issued at login, and
+  `middleware.RequirePasswordSet` (chained right after `RequireAuth` on the
+  whole `/api` group) blocks every route except `/api/me` and
+  `/api/users/me/password` for a session in that state — mirrored on the
+  frontend by `ForcedPasswordChange`, rendered instead of `<Layout>` (and
+  everything inside it) whenever `user.must_change_password` is true, so
+  there's no nav to escape through either.
+- **Self-service change also resolves a forced reset** — same endpoint, same
+  request shape. On success it clears the flag and issues a fresh session
+  token directly (rather than sending the user back to `/login`), so someone
+  completing a forced reset lands straight in the app.
+- **Self-lockout carve-out** matches the existing deactivate/delete pattern
+  in `UpdateUser`/`DeleteUser` exactly: an admin can't reset their own
+  password via the admin endpoint (400, "use Settings instead") and the
+  "Reset password" action is disabled on their own row in the user list —
+  they already know their current password, so the self-service flow is the
+  correct path.
+
 ## Still open (not built yet)
 
 - **AWS deployment.** Built and verified against local Postgres only — no

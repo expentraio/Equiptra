@@ -13,11 +13,19 @@ import { Users } from './pages/Users'
 import { ServiceRecords } from './pages/ServiceRecords'
 import { ServiceRecordDetail } from './pages/ServiceRecordDetail'
 import { ReportFault } from './pages/ReportFault'
+import { Settings } from './pages/Settings'
+import { ForcedPasswordChange } from './pages/ForcedPasswordChange'
 
+// Gates the entire authenticated shell — a must_change_password session
+// sees ONLY ForcedPasswordChange, not <Layout> or any route inside it, so
+// there's no nav to escape through. The backend enforces the same
+// restriction on every /api call (RequirePasswordSet), so this isn't just
+// a client-side nicety.
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="p-8 text-[13px] text-ink-soft">Loading…</div>
   if (!user) return <Navigate to="/login" replace />
+  if (user.must_change_password) return <ForcedPasswordChange />
   return <>{children}</>
 }
 
@@ -48,6 +56,7 @@ function AppRoutes() {
         <Route path="/delivery-notes" element={<DeliveryNotes />} />
         <Route path="/services" element={<ServiceRecords />} />
         <Route path="/services/:id" element={<ServiceRecordDetail />} />
+        <Route path="/settings" element={<Settings />} />
         <Route
           path="/users"
           element={

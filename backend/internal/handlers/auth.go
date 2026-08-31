@@ -23,9 +23,9 @@ func (a *API) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	err := a.DB.QueryRow(r.Context(),
-		`SELECT id, name, email, role, active, password_hash FROM users WHERE lower(email) = lower($1)`,
+		`SELECT id, name, email, role, active, must_change_password, password_hash FROM users WHERE lower(email) = lower($1)`,
 		req.Email,
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Active, &user.PasswordHash)
+	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Active, &user.MustChangePassword, &user.PasswordHash)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid email or password")
 		return
@@ -43,17 +43,18 @@ func (a *API) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := middleware.IssueToken(user.ID, user.Role)
+	token, err := middleware.IssueToken(user.ID, user.Role, user.MustChangePassword)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not issue session")
 		return
 	}
 	middleware.SetSessionCookie(w, token)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"id":    user.ID,
-		"name":  user.Name,
-		"email": user.Email,
-		"role":  user.Role,
+		"id":                   user.ID,
+		"name":                 user.Name,
+		"email":                user.Email,
+		"role":                 user.Role,
+		"must_change_password": user.MustChangePassword,
 	})
 }
 
@@ -71,9 +72,9 @@ func (a *API) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	err := a.DB.QueryRow(r.Context(),
-		`SELECT id, name, email, role, active FROM users WHERE id = $1`,
+		`SELECT id, name, email, role, active, must_change_password FROM users WHERE id = $1`,
 		claims.UserID,
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Active)
+	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Active, &user.MustChangePassword)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "user not found")
 		return

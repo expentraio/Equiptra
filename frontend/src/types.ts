@@ -207,6 +207,7 @@ export interface CurrentUser {
   name: string
   email: string
   role: UserRole
+  must_change_password: boolean
 }
 
 export interface User {
@@ -215,6 +216,7 @@ export interface User {
   email: string
   role: UserRole
   active: boolean
+  must_change_password: boolean
   created_at: string
   updated_at: string
   has_allocation_history: boolean

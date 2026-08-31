@@ -14,11 +14,11 @@ import (
 	"equiptra/internal/models"
 )
 
-const userSelectCols = `id, name, email, role, active, created_at, updated_at`
+const userSelectCols = `id, name, email, role, active, must_change_password, created_at, updated_at`
 
 func scanUser(row pgx.Row) (models.User, error) {
 	var u models.User
-	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.MustChangePassword, &u.CreatedAt, &u.UpdatedAt)
 	return u, err
 }
 
@@ -33,7 +33,7 @@ type UserListItem struct {
 
 func (a *API) ListUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.DB.Query(r.Context(), `
-		SELECT u.id, u.name, u.email, u.role, u.active, u.created_at, u.updated_at,
+		SELECT u.id, u.name, u.email, u.role, u.active, u.must_change_password, u.created_at, u.updated_at,
 		       EXISTS(
 		         SELECT 1 FROM booking_allocations ba
 		         WHERE ba.checked_out_by = u.id OR ba.checked_in_by = u.id
@@ -50,7 +50,7 @@ func (a *API) ListUsers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item UserListItem
 		u := &item.User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.CreatedAt, &u.UpdatedAt, &item.HasAllocationHistory); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.MustChangePassword, &u.CreatedAt, &u.UpdatedAt, &item.HasAllocationHistory); err != nil {
 			writeError(w, http.StatusInternalServerError, "scan failed")
 			return
 		}
@@ -202,6 +202,127 @@ func (a *API) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type changeOwnPasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// ChangeOwnPassword is the self-service flow (Settings page) and also how a
+// forced reset gets resolved — RequirePasswordSet exempts this exact path so
+// a must_change_password session can reach it. Verifies the current
+// password even in the forced-reset case: the "current" password there is
+// the admin-set temporary one, and requiring it here confirms the caller
+// actually knows it rather than just holding a still-valid cookie.
+func (a *API) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	var req changeOwnPasswordRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		writeError(w, http.StatusBadRequest, "new password must be at least 8 characters")
+		return
+	}
+
+	var currentHash string
+	err := a.DB.QueryRow(r.Context(), `SELECT password_hash FROM users WHERE id = $1`, claims.UserID).Scan(&currentHash)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.CurrentPassword)); err != nil {
+		writeError(w, http.StatusBadRequest, "current password is incorrect")
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not hash password")
+		return
+	}
+
+	u, err := scanUser(a.DB.QueryRow(r.Context(), `
+		UPDATE users SET password_hash = $1, must_change_password = false, updated_at = now()
+		WHERE id = $2
+		RETURNING `+userSelectCols,
+		string(newHash), claims.UserID,
+	))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+
+	// Land straight in the app rather than forcing a fresh login: the old
+	// token (if this came from a forced reset) still carries
+	// must_change_password=true, so a new one is issued and swapped in.
+	token, err := middleware.IssueToken(u.ID, u.Role, false)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not issue session")
+		return
+	}
+	middleware.SetSessionCookie(w, token)
+	writeJSON(w, http.StatusOK, u)
+}
+
+type adminResetPasswordRequest struct {
+	NewPassword string `json:"new_password"`
+}
+
+// AdminResetPassword sets a temporary password for a locked-out user and
+// flags must_change_password so they're forced to set their own on next
+// login — the admin never ends up as the long-term holder of a teammate's
+// real password. Self-lockout carve-out matches UpdateUser/DeleteUser: an
+// admin resetting their own password should use the self-service flow
+// instead (they already know their current password).
+func (a *API) AdminResetPassword(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	claims, ok := middleware.UserFromContext(r.Context())
+	if ok && claims.UserID == id {
+		writeError(w, http.StatusBadRequest, "cannot reset your own password this way — use Settings instead")
+		return
+	}
+	var req adminResetPasswordRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		writeError(w, http.StatusBadRequest, "new password must be at least 8 characters")
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not hash password")
+		return
+	}
+
+	u, err := scanUser(a.DB.QueryRow(r.Context(), `
+		UPDATE users SET password_hash = $1, must_change_password = true, updated_at = now()
+		WHERE id = $2
+		RETURNING `+userSelectCols,
+		string(newHash), id,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, u)
 }
 
 func isUniqueViolation(err error) bool {
