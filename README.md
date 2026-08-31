@@ -194,14 +194,19 @@ to the existing `service_status` enum and `field_report` to `service_source`
 
 - **AWS deployment.** Built and verified against local Postgres only — no
   RDS/ECS/Lambda provisioning has been done. Needs your AWS access.
-- ~~Monday.com Lambda → `service_records` write step~~ — **retired.** The
-  Monday.com relay is gone; fault reporting now goes through Equiptra
-  directly (automatic at check-in damage, or the public `/report-fault` form
-  for staff and freelancers alike — see "Fault reporting & Services tab"
-  below). No AWS/Lambda code for this ever existed in this repo to remove;
-  if a Lambda/trigger/IAM statement/Secrets entry exists in the AWS console
-  from an earlier manual setup, that's on you to check and clean up
-  separately — nothing here can see or touch it.
+- ~~Monday.com Lambda → `service_records` write step~~ — **retired, and the
+  AWS side is fully decommissioned.** Correction to an earlier assumption
+  here: this wasn't unfinished — it was a real, working integration
+  (`fault-report-currentrms-lookup` + `fault-report-monday-create-item`
+  Lambdas behind a standalone `fault-reporting-integration-api` API Gateway,
+  never wired to this app's own `/api/service-records`), just never rolled
+  out past Ric's own testing. Fault reporting now goes through Equiptra
+  directly instead (automatic at check-in damage, or the public
+  `/report-fault` form for staff and freelancers alike — see "Fault
+  reporting & Services tab" below). The old Lambdas, the API Gateway, both
+  IAM roles, both CloudWatch log groups, and both Secrets Manager secrets
+  (7-day deletion hold, automatic) have all been removed directly in the AWS
+  console — nothing outstanding.
 - **Carnet PDF template.** Functional general-list table but per the brief
   needs checking against a real past carnet before first live use.
 - **Delivery note layout.** Matches the reference document's fields, table
