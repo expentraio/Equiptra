@@ -102,22 +102,42 @@ the Supabase Storage dashboard — nothing in this repo creates or configures
 buckets.
 
 ```bash
-# Local dev/testing — needs a real SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY
-SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run ./cmd/api
+# Local dev/testing — needs a real SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY.
+# DATABASE_URL is required too — db.Connect() has no local-dev fallback
+# (see the backfill warning below for why).
+DATABASE_URL=... SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run ./cmd/api
 ```
 
 **One-off backfill** of the 693 CurrentRMS photos already extracted locally
 (`Photo Dump/product_photos/`, see `extract_photos.py`) to real photos in
 storage:
 
+> **`DATABASE_URL` matters here as much as the Supabase vars.** The tool
+> uploads to Storage and writes `products.image_url` in two separate steps
+> against two separate systems — it's entirely possible for the Storage
+> upload to succeed against the real bucket while the DB write lands on
+> the wrong database, because nothing ties the two together. That's
+> exactly what happened running the real backfill: all 693 files uploaded
+> correctly, but `DATABASE_URL` was never pointed at production Postgres
+> for that run, so `image_url` only got set locally — not caught until
+> someone checked the live site and found no photos. Fixed after the fact
+> with a SQL `UPDATE` joining `storage.objects` back to
+> `products.legacy_id`, scoped to rows where `image_url` was still empty.
+> `db.Connect()` no longer has a local-dev fallback (an unset
+> `DATABASE_URL` now fails immediately with a clear error instead of
+> silently connecting to local Postgres), which would have caught this
+> outright — but a *wrong* `DATABASE_URL` still passes silently, so before
+> the **full** run (the sample run matters less), explicitly confirm it's
+> the real one, not whatever's left over from local testing.
+
 ```bash
 cd backend/cmd/migrate-photos
 # Sample run first — this is one-time and not cleanly undoable
-SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run . -limit 3 \
+DATABASE_URL=... SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run . -limit 3 \
   -manifest "/path/to/Photo Dump/product_photos/_manifest.csv" \
   -photos-dir "/path/to/Photo Dump/product_photos"
-# Full batch once the sample looks right
-SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run . \
+# Full batch once the sample looks right — DOUBLE-CHECK DATABASE_URL first
+DATABASE_URL=... SUPABASE_PROJECT_REF=... SUPABASE_SERVICE_ROLE_KEY=... go run . \
   -manifest "/path/to/Photo Dump/product_photos/_manifest.csv" \
   -photos-dir "/path/to/Photo Dump/product_photos"
 ```
