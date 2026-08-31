@@ -21,6 +21,15 @@ var allowedPhotoContentTypes = map[string]string{
 
 const maxPhotoSizeBytes = 5 << 20 // 5MB
 
+// photoCacheMaxAgeSeconds is one year. Product photos only change via an
+// explicit re-upload (x-upsert replaces the object at the same path in
+// place, so the URL never changes), so a long cache lifetime is safe —
+// the only cost is that a browser which already cached the old photo
+// won't see a replacement until its cache naturally evicts, which is an
+// acceptable trade-off at this usage scale. See
+// docs/equiptra-image-caching-addendum.md.
+const photoCacheMaxAgeSeconds = 31536000
+
 // UploadProductPhoto proxies a multipart file upload to Supabase Storage's
 // REST API using the service-role key (server-side only, never exposed to
 // the browser) and saves the resulting public URL on the product. Admin-only,
@@ -87,7 +96,7 @@ func (a *API) UploadProductPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := strconv.FormatInt(id, 10) + "." + ext
-	publicURL, err := a.Supabase.UploadObject(r.Context(), productPhotosBucket, path, contentType, body)
+	publicURL, err := a.Supabase.UploadObject(r.Context(), productPhotosBucket, path, contentType, body, photoCacheMaxAgeSeconds)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "upload failed: "+err.Error())
 		return

@@ -50,7 +50,19 @@ func NewSupabaseClient() *SupabaseClient {
 // instead of erroring, and returns the object's public URL. The bucket
 // must already be set to public in the Supabase dashboard — this client
 // doesn't create or configure buckets.
-func (c *SupabaseClient) UploadObject(ctx context.Context, bucket, path, contentType string, body []byte) (publicURL string, err error) {
+//
+// cacheControlMaxAgeSeconds sets how long the object may be cached by
+// browsers/CDNs. Confirmed empirically against this project (the public
+// docs/blog posts on this are inconsistent across API versions — see
+// docs/equiptra-image-caching-addendum.md): the request must send a plain
+// `cache-control: max-age=<seconds>` header — no "public," prefix, the
+// server adds that itself when serving the object. Verified via
+// Supabase's authenticated object-info endpoint (which reads the stored
+// DB metadata directly, bypassing any CDN) that this is what actually
+// gets persisted; a multipart `cacheControl` form field and a header
+// value that already included "public," were both tried and did not
+// take effect against this project.
+func (c *SupabaseClient) UploadObject(ctx context.Context, bucket, path, contentType string, body []byte, cacheControlMaxAgeSeconds int) (publicURL string, err error) {
 	url := fmt.Sprintf("https://%s.supabase.co/storage/v1/object/%s/%s", c.projectRef, bucket, path)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
@@ -64,6 +76,7 @@ func (c *SupabaseClient) UploadObject(ctx context.Context, bucket, path, content
 	// present and correct.
 	req.Header.Set("apikey", c.serviceKey)
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("cache-control", fmt.Sprintf("max-age=%d", cacheControlMaxAgeSeconds))
 	req.Header.Set("x-upsert", "true")
 
 	resp, err := c.httpClient.Do(req)
@@ -78,4 +91,36 @@ func (c *SupabaseClient) UploadObject(ctx context.Context, bucket, path, content
 	}
 
 	return fmt.Sprintf("https://%s.supabase.co/storage/v1/object/public/%s/%s", c.projectRef, bucket, path), nil
+}
+
+// DownloadObject fetches an object's current bytes via the authenticated
+// REST API (works regardless of whether the bucket is public). Used as a
+// fallback by the cache-header repair script when a local source file is
+// no longer available — the existing stored bytes are re-uploaded
+// unchanged, just with the corrected cache-control header this time.
+func (c *SupabaseClient) DownloadObject(ctx context.Context, bucket, path string) (body []byte, contentType string, err error) {
+	url := fmt.Sprintf("https://%s.supabase.co/storage/v1/object/%s/%s", c.projectRef, bucket, path)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.serviceKey)
+	req.Header.Set("apikey", c.serviceKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("downloading from storage: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return nil, "", fmt.Errorf("storage download failed (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("reading response body: %w", err)
+	}
+	return body, resp.Header.Get("Content-Type"), nil
 }
