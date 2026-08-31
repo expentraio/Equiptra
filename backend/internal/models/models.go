@@ -43,16 +43,24 @@ const (
 type ServiceStatus string
 
 const (
-	ServiceStatusOpen               ServiceStatus = "open"
+	ServiceStatusOpen ServiceStatus = "open"
+	// ServiceStatusUnderInvestigation is deprecated — left in place for any
+	// historic rows, but no longer written by new code. Use
+	// ServiceStatusInProgress instead.
 	ServiceStatusUnderInvestigation ServiceStatus = "under_investigation"
+	ServiceStatusInProgress         ServiceStatus = "in_progress"
 	ServiceStatusResolved           ServiceStatus = "resolved"
 )
 
 type ServiceSource string
 
 const (
+	// ServiceSourceMondayReport is deprecated — the Monday.com relay is
+	// retired. Left in place for historic rows; nothing writes it going
+	// forward. Use ServiceSourceFieldReport instead.
 	ServiceSourceMondayReport  ServiceSource = "monday_report"
 	ServiceSourceCheckinDamage ServiceSource = "checkin_damage"
+	ServiceSourceFieldReport   ServiceSource = "field_report"
 )
 
 type UserRole string
@@ -100,6 +108,10 @@ type Asset struct {
 	ProductName     *string `json:"product_name,omitempty"`
 	Category        *string `json:"category,omitempty"`
 	ProductImageURL *string `json:"product_image_url,omitempty"`
+	// HasOpenFault is true if the asset has any open/in_progress
+	// service_records entry — excluded from future allocations regardless
+	// of Status; see assetHasOpenFault in service_records.go.
+	HasOpenFault bool `json:"has_open_fault"`
 }
 
 type Project struct {
@@ -187,8 +199,23 @@ type ServiceRecord struct {
 	Source           ServiceSource `json:"source"`
 	ResolvedDate     *time.Time    `json:"resolved_date,omitempty"`
 	ResolutionNotes  *string       `json:"resolution_notes,omitempty"`
-	CreatedAt        time.Time     `json:"created_at"`
-	UpdatedAt        time.Time     `json:"updated_at"`
+	// ReporterUserID is set for an authenticated (staff) submission;
+	// ReporterName/ReporterEmail are set for a freelancer submission with
+	// no Equiptra account. Exactly one of the two forms is populated.
+	ReporterUserID *int64    `json:"reporter_user_id,omitempty"`
+	ReporterName   *string   `json:"reporter_name,omitempty"`
+	ReporterEmail  *string   `json:"reporter_email,omitempty"`
+	ResolvedBy     *int64    `json:"resolved_by,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+
+	// Populated on read (joined) endpoints only.
+	AssetNumber      *string `json:"asset_number,omitempty"`
+	SerialNumber     *string `json:"serial_number,omitempty"`
+	ProductID        int64   `json:"product_id"`
+	ProductName      *string `json:"product_name,omitempty"`
+	ReporterUserName *string `json:"reporter_user_name,omitempty"`
+	ResolvedByName   *string `json:"resolved_by_name,omitempty"`
 }
 
 type User struct {

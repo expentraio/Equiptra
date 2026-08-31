@@ -1,0 +1,63 @@
+flowchart TD
+    A["Create booking request<br/>(project + product or placeholder + qty + dates)"] --> B{"Product decided yet?"}
+    B -->|"No — still vague"| C["Status: draft<br/>(placeholder_description only)"]
+    C -.->|"refine later"| B
+    B -->|"Yes"| D["Check available stock<br/>across date range<br/>(excludes assets with open/in_progress<br/>service_records — see asset_availability view)"]
+    D --> E{"Enough stock?"}
+    E -->|"No"| F["shortage_flag = true<br/>log sub_hire_notes"]
+    E -->|"Yes"| G["Status: reserved"]
+    F --> G
+
+    G --> H["Pack-out: pick specific asset(s)<br/>create booking_allocation"]
+    H --> I{"Asset already allocated<br/>on overlapping dates?"}
+    I -->|"Yes"| J["Flag conflict<br/>(requires explicit override)"]
+    I -->|"No"| K["Status: allocated"]
+    J --> K
+
+    K --> INS["Pre-checkout inspection"]
+    INS --> INSD{"Inspection passed?"}
+    INSD -->|"No"| INSF["Checkout BLOCKED<br/>until resolved"]
+    INSF -.-> INS
+    INSD -->|"Yes"| L["Checkout<br/>log who + when + condition_out_notes"]
+    L --> M["Out on the job"]
+    M -->|"fault occurs while deployed"| MR["Mid-rental fault<br/>(asset stays checked_out on this allocation)"]
+    MR -.-> SR
+    M -->|"job runs long"| EXT["Extend booking_request date_in<br/>re-run shortage + conflict checks"]
+    EXT -.-> M
+    M --> N["Check-in<br/>log who + when + condition_in_notes"]
+    N --> O{"Damage flagged?"}
+    O -->|"Yes"| SR
+    O -->|"No"| Q["Allocation closed / asset available again"]
+
+    subgraph FaultReporting["Fault Reporting & Services Tab"]
+        FORM["Public fault-report form<br/>(no login required)"] -->|"internal staff"| FSTAFF["Capture reporter_user_id"]
+        FORM -->|"freelancer"| FFREE["Capture reporter_name + reporter_email"]
+        FSTAFF --> SR
+        FFREE --> SR
+        SR["Create/attach service_records entry<br/>status = open<br/>source = checkin_damage / field_report"]
+        SR --> BLOCK["Asset excluded from asset_availability<br/>(future bookings only — active/current<br/>allocation is NOT retroactively affected)"]
+        BLOCK --> TAB["Visible in Services/Repairs tab"]
+        TAB --> REVIEW{"Staff updates status"}
+        REVIEW -->|"work begun"| PROG["status = in_progress<br/>still excluded"]
+        PROG -.-> REVIEW
+        REVIEW -->|"fixed"| RES["status = resolved<br/>resolved_at + resolved_by set"]
+        RES --> AVAIL{"Any other open/in_progress<br/>records on this asset?"}
+        AVAIL -->|"No"| Q2["Asset returns to bookable pool automatically"]
+        AVAIL -->|"Yes"| BLOCK
+    end
+
+    Q -.-> D
+    Q2 -.-> D
+
+    style C fill:#E6F4EF,stroke:#0EA68A
+    style F fill:#FBEEE0,stroke:#B4661A
+    style J fill:#FBEAE7,stroke:#A83E33
+    style Q fill:#E6F4EF,stroke:#0EA68A
+    style Q2 fill:#E6F4EF,stroke:#0EA68A
+    style INSF fill:#FBEAE7,stroke:#A83E33
+    style MR fill:#FBEEE0,stroke:#B4661A
+    style EXT fill:#E6F4EF,stroke:#0EA68A
+    style SR fill:#FBEAE7,stroke:#A83E33
+    style BLOCK fill:#FBEAE7,stroke:#A83E33
+    style RES fill:#E6F4EF,stroke:#0EA68A
+    style FaultReporting fill:#f5f0ff,stroke:#7c5cff

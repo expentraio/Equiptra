@@ -64,6 +64,12 @@ export const UsersIcon = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 )
 
+export const WrenchIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M14.5 6.5a4 4 0 0 1-5.4 5.4L4 17l-1-1 5.1-5.1a4 4 0 0 1 5.4-5.4l-2.6 2.6 1 1 2.6-2.6z" />
+  </Icon>
+)
+
 export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <path d="M18 6L6 18M6 6l12 12" />

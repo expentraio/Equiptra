@@ -216,6 +216,15 @@ func (a *API) CreateAllocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "asset is not active ("+string(asset.Status)+")")
 		return
 	}
+	hasFault, err := assetHasOpenFault(r.Context(), a.DB, asset.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "fault check failed")
+		return
+	}
+	if hasFault {
+		writeError(w, http.StatusBadRequest, "asset has an open or in-progress fault and cannot be allocated")
+		return
+	}
 
 	var conflicts []AllocationConflict
 	if asset.IsBulk {
@@ -396,9 +405,9 @@ func (a *API) CheckinAllocation(w http.ResponseWriter, r *http.Request) {
 		}
 		var recordID int64
 		err = a.DB.QueryRow(r.Context(), `
-			INSERT INTO service_records (asset_id, date_reported, fault_description, status, source)
-			VALUES ($1, CURRENT_DATE, $2, 'open', 'checkin_damage')
-			RETURNING id`, assetID, description,
+			INSERT INTO service_records (asset_id, date_reported, fault_description, status, source, reporter_user_id)
+			VALUES ($1, CURRENT_DATE, $2, 'open', 'checkin_damage', $3)
+			RETURNING id`, assetID, description, claims.UserID,
 		).Scan(&recordID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "damage service record creation failed")

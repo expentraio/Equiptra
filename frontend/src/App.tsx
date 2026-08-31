@@ -10,6 +10,9 @@ import { BookingBoard } from './pages/BookingBoard'
 import { Carnets } from './pages/Carnets'
 import { DeliveryNotes } from './pages/DeliveryNotes'
 import { Users } from './pages/Users'
+import { ServiceRecords } from './pages/ServiceRecords'
+import { ServiceRecordDetail } from './pages/ServiceRecordDetail'
+import { ReportFault } from './pages/ReportFault'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
@@ -28,6 +31,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/report-fault" element={<ReportFault />} />
       <Route
         element={
           <RequireAuth>
@@ -42,6 +46,8 @@ function AppRoutes() {
         <Route path="/projects/:id" element={<BookingBoard />} />
         <Route path="/carnets" element={<Carnets />} />
         <Route path="/delivery-notes" element={<DeliveryNotes />} />
+        <Route path="/services" element={<ServiceRecords />} />
+        <Route path="/services/:id" element={<ServiceRecordDetail />} />
         <Route
           path="/users"
           element={

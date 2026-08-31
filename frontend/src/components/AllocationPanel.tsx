@@ -352,15 +352,22 @@ function AddAllocationForm({
         {assets.map((a) => (
           <button
             key={a.id}
+            disabled={a.has_open_fault}
+            title={a.has_open_fault ? 'Excluded — this asset has an open or in-progress fault' : undefined}
             onClick={() => {
               setSelected(a)
               setWarning(null)
             }}
             className={`rounded-control border px-2.5 py-1.5 text-[12px] font-medium ${
-              selected?.id === a.id ? 'border-ink bg-ink text-white' : 'border-border text-ink-soft hover:border-border-strong'
+              a.has_open_fault
+                ? 'cursor-not-allowed border-border bg-red-fill text-red opacity-70'
+                : selected?.id === a.id
+                  ? 'border-ink bg-ink text-white'
+                  : 'border-border text-ink-soft hover:border-border-strong'
             }`}
           >
             {a.is_bulk ? `bulk (${a.quantity} held)` : a.asset_number}
+            {a.has_open_fault ? ' · faulted' : ''}
           </button>
         ))}
         {assets.length === 0 && <span className="text-[12px] text-ink-soft">No active assets found for this product.</span>}

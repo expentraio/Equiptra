@@ -48,7 +48,7 @@ func (a *API) ListProducts(w http.ResponseWriter, r *http.Request) {
 		       p.country_of_origin_code, p.is_accessory, p.barcode, p.image_url, p.description, p.active,
 		       p.created_at, p.updated_at,
 		       COALESCE(units.total, 0) AS total_units,
-		       GREATEST(COALESCE(units.total, 0) - COALESCE(alloc.active_count, 0), 0) AS available_units
+		       GREATEST(COALESCE(units.total, 0) - COALESCE(alloc.active_count, 0) - COALESCE(faulted.count, 0), 0) AS available_units
 		FROM products p
 		LEFT JOIN (
 			SELECT product_id, SUM(CASE WHEN is_bulk THEN quantity ELSE 1 END)::int AS total
@@ -61,6 +61,21 @@ func (a *API) ListProducts(w http.ResponseWriter, r *http.Request) {
 			WHERE ba.status IN ('allocated', 'checked_out')
 			GROUP BY a.product_id
 		) alloc ON alloc.product_id = p.id
+		LEFT JOIN (
+			-- Assets with an open/in_progress fault: a whole faulted bulk asset
+			-- withholds its full held quantity, matching CreateAllocation's
+			-- all-or-nothing block against that asset_id. Still counted in
+			-- total_units (still physically active stock) — only subtracted
+			-- from available_units, same treatment as an active allocation.
+			SELECT a.product_id, SUM(CASE WHEN a.is_bulk THEN a.quantity ELSE 1 END)::int AS count
+			FROM assets a
+			WHERE a.status = 'active'
+			  AND EXISTS (
+			      SELECT 1 FROM service_records sr
+			      WHERE sr.asset_id = a.id AND sr.status IN ('open', 'in_progress')
+			  )
+			GROUP BY a.product_id
+		) faulted ON faulted.product_id = p.id
 		WHERE ($1 = '' OR p.name ILIKE '%' || $1 || '%')
 		  AND ($2 = '' OR p.category = $2)
 		ORDER BY p.name`,

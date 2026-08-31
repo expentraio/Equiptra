@@ -15,14 +15,16 @@ import (
 const assetSelectCols = `
 	a.id, a.legacy_id, a.product_id, a.asset_number, a.serial_number, a.is_bulk, a.quantity,
 	a.location, a.purchase_price, a.replacement_value, a.purchase_date, a.status, a.notes,
-	a.created_at, a.updated_at, p.name, p.category, p.image_url`
+	a.created_at, a.updated_at, p.name, p.category, p.image_url,
+	EXISTS(SELECT 1 FROM service_records sr WHERE sr.asset_id = a.id AND sr.status IN ('open', 'in_progress')) AS has_open_fault`
 
 func scanAsset(row pgx.Row) (models.Asset, error) {
 	var asset models.Asset
 	err := row.Scan(&asset.ID, &asset.LegacyID, &asset.ProductID, &asset.AssetNumber,
 		&asset.SerialNumber, &asset.IsBulk, &asset.Quantity, &asset.Location,
 		&asset.PurchasePrice, &asset.ReplacementValue, &asset.PurchaseDate, &asset.Status,
-		&asset.Notes, &asset.CreatedAt, &asset.UpdatedAt, &asset.ProductName, &asset.Category, &asset.ProductImageURL)
+		&asset.Notes, &asset.CreatedAt, &asset.UpdatedAt, &asset.ProductName, &asset.Category, &asset.ProductImageURL,
+		&asset.HasOpenFault)
 	return asset, err
 }
 
@@ -245,8 +247,8 @@ func (a *API) GetAssetHistory(w http.ResponseWriter, r *http.Request) {
 	allocationRows.Close()
 
 	records, err := a.DB.Query(r.Context(), `
-		SELECT `+serviceRecordSelectCols+`
-		FROM service_records WHERE asset_id = $1 ORDER BY date_reported DESC`, id)
+		SELECT `+serviceRecordSelectCols+serviceRecordJoins+`
+		WHERE sr.asset_id = $1 ORDER BY sr.date_reported DESC`, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return

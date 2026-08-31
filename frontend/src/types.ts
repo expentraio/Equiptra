@@ -2,8 +2,8 @@ export type AssetStatus = 'active' | 'written_off' | 'sold' | 'missing'
 export type ProjectStatus = 'tentative' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled'
 export type BookingRequestStatus = 'draft' | 'reserved' | 'partially_allocated' | 'out' | 'returned' | 'cancelled'
 export type BookingAllocationStatus = 'allocated' | 'checked_out' | 'returned'
-export type ServiceStatus = 'open' | 'under_investigation' | 'resolved'
-export type ServiceSource = 'monday_report' | 'checkin_damage'
+export type ServiceStatus = 'open' | 'under_investigation' | 'in_progress' | 'resolved'
+export type ServiceSource = 'monday_report' | 'checkin_damage' | 'field_report'
 export type UserRole = 'admin' | 'standard'
 
 export interface Product {
@@ -42,6 +42,7 @@ export interface Asset {
   product_name?: string
   category?: string
   product_image_url?: string
+  has_open_fault: boolean
 }
 
 export interface ProductListItem extends Product {
@@ -145,8 +146,26 @@ export interface ServiceRecord {
   source: ServiceSource
   resolved_date?: string
   resolution_notes?: string
+  reporter_user_id?: number
+  reporter_name?: string
+  reporter_email?: string
+  resolved_by?: number
   created_at: string
   updated_at: string
+  asset_number?: string
+  serial_number?: string
+  product_id: number
+  product_name?: string
+  reporter_user_name?: string
+  resolved_by_name?: string
+}
+
+export interface PublicAssetSearchResult {
+  asset_id: number
+  asset_number?: string
+  serial_number?: string
+  product_name: string
+  category?: string
 }
 
 export interface CarnetLine {

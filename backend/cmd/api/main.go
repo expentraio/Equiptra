@@ -60,6 +60,19 @@ func main() {
 	r.Post("/api/auth/login", api.Login)
 	r.Post("/api/auth/logout", api.Logout)
 
+	// Public fault-report form: reachable by freelancers with no Equiptra
+	// account, so it sits outside RequireAuth. OptionalAuth still injects
+	// claims when a staff member happens to have a session, so the handler
+	// can auto-fill the reporter rather than asking them to re-type it.
+	// Rate-limited since it's an open write (and read) surface on the
+	// public internet, not gated by auth at all.
+	r.Route("/api/public", func(r chi.Router) {
+		r.Use(middleware.RateLimit(20, time.Minute))
+		r.Use(middleware.OptionalAuth)
+		r.Get("/assets", api.SearchPublicAssets)
+		r.Post("/fault-reports", api.CreateFaultReport)
+	})
+
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
 
@@ -128,7 +141,9 @@ func main() {
 
 		r.Route("/service-records", func(r chi.Router) {
 			r.Get("/", api.ListServiceRecords)
-			r.Post("/", api.CreateServiceRecord)
+			r.Get("/{id}", api.GetServiceRecord)
+			// Creation happens via check-in damage (CheckinAllocation) or the
+			// public fault-report form (/api/public/fault-reports) — not here.
 			r.Put("/{id}", api.UpdateServiceRecord)
 		})
 

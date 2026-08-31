@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { GridIcon, FolderIcon, FileIcon, UsersIcon, LogOutIcon } from './icons'
+import { GridIcon, FolderIcon, FileIcon, UsersIcon, WrenchIcon, LogOutIcon } from './icons'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
   { to: '/products', label: 'Products', icon: GridIcon },
   { to: '/projects', label: 'Projects', icon: FolderIcon },
+  { to: '/services', label: 'Services', icon: WrenchIcon },
   { to: '/carnets', label: 'Carnets', icon: FileIcon },
   { to: '/delivery-notes', label: 'Delivery notes', icon: FileIcon },
 ]

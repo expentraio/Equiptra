@@ -143,6 +143,11 @@ export function ProductDetail() {
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusBadgeClass[asset.status]}`}>
                       {statusLabel[asset.status]}
                     </span>
+                    {asset.has_open_fault && (
+                      <span className="ml-1.5 rounded-full bg-red-fill px-2.5 py-1 text-[11px] font-semibold text-red">
+                        Faulted
+                      </span>
+                    )}
                   </td>
                   <td className="border-b border-border px-4 py-3.25 text-[13px] text-ink-soft">
                     {asset.current_allocations.length === 0 && '—'}

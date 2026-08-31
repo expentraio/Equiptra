@@ -100,6 +100,28 @@ func RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
+// OptionalAuth injects the caller's claims into context if a valid session
+// cookie happens to be present, but never rejects the request — for the one
+// or two genuinely public endpoints (the fault-report form) that need to
+// tell a logged-in staff member from an anonymous freelancer without
+// requiring a session either way.
+func OptionalAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(CookieName)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		claims, err := parseToken(cookie.Value)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx := context.WithValue(r.Context(), userContextKey, claims)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 // RequireAdmin must be chained after RequireAuth.
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
