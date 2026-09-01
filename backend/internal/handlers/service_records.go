@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"equiptra/internal/middleware"
 	"equiptra/internal/models"
@@ -22,7 +21,7 @@ import (
 // existing convention of inline Go helpers (computeShortage,
 // findAllocationConflicts) rather than a SQL view, since nothing else in
 // this schema is modeled as a view.
-func assetHasOpenFault(ctx context.Context, db *pgxpool.Pool, assetID int64) (bool, error) {
+func assetHasOpenFault(ctx context.Context, db dbExecutor, assetID int64) (bool, error) {
 	var exists bool
 	err := db.QueryRow(ctx, `
 		SELECT EXISTS(

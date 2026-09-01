@@ -138,6 +138,9 @@ export function ProductDetail() {
                 >
                   <td className="border-b border-border px-4 py-3.25 text-[13px]">
                     <AssetTag number={asset.asset_number} />
+                    {asset.home_rack_id && (
+                      <div className="mt-1 text-[11px] text-ink-soft">Home: Rack {asset.home_rack_asset_number ?? asset.home_rack_id}</div>
+                    )}
                   </td>
                   <td className="border-b border-border px-4 py-3.25 text-[13px]">{asset.serial_number || '—'}</td>
                   <td className="border-b border-border px-4 py-3.25 text-[13px]">{asset.location || '—'}</td>

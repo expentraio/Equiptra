@@ -96,6 +96,7 @@ func main() {
 			r.Get("/", api.ListAssets)
 			r.Get("/{id}", api.GetAsset)
 			r.Get("/{id}/history", api.GetAssetHistory)
+			r.Get("/{id}/rack-members", api.ListRackMembers)
 			// Unlike products, editing an existing asset covers fields like
 			// asset_number/status that are closer to value-editing than
 			// day-to-day booking — admin-gated, same as delete. Create stays
@@ -105,6 +106,10 @@ func main() {
 				r.Use(middleware.RequireAdmin)
 				r.Put("/{id}", api.UpdateAsset)
 				r.Delete("/{id}", api.DeleteAsset)
+				// Rack membership is permanent kit structure, same access
+				// tier as the asset-edit screen — see
+				// docs/equiptra-racks-cases-addendum.md.
+				r.Post("/{id}/swap-rack-member", api.SwapRackMember)
 			})
 		})
 
@@ -137,6 +142,14 @@ func main() {
 			r.Delete("/{id}", api.DeleteAllocation)
 			r.Post("/{id}/checkout", api.CheckoutAllocation)
 			r.Post("/{id}/checkin", api.CheckinAllocation)
+			r.Post("/{id}/return-to-home-rack", api.MarkReturnedToHomeRack)
+			// Case packing is per-job pack-out work, same access tier as
+			// picking a specific asset for a booking (CreateAllocation) —
+			// see docs/equiptra-racks-cases-addendum.md.
+			r.Get("/{id}/case-contents", api.ListCaseContents)
+			r.Post("/{id}/case-contents", api.AddCaseContent)
+			r.Delete("/{id}/case-contents/{contentAssetId}", api.RemoveCaseContent)
+			r.Post("/{id}/case-contents/swap", api.SwapCaseContent)
 		})
 
 		r.Route("/service-records", func(r chi.Router) {

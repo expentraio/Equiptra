@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
-import type { Asset, AssetStatus } from '../types'
+import type { Asset, AssetStatus, ContainerType } from '../types'
 import { CloseIcon } from './icons'
 
 function toDateInput(iso?: string) {
@@ -12,6 +12,12 @@ const STATUS_OPTIONS: { value: AssetStatus; label: string }[] = [
   { value: 'written_off', label: 'Written off' },
   { value: 'sold', label: 'Sold' },
   { value: 'missing', label: 'Missing' },
+]
+
+const CONTAINER_TYPE_OPTIONS: { value: ContainerType | ''; label: string }[] = [
+  { value: '', label: 'Not a container' },
+  { value: 'rack', label: 'Rack (fixed kit)' },
+  { value: 'case', label: 'Case (packed per job)' },
 ]
 
 export function AssetFormModal({
@@ -38,8 +44,20 @@ export function AssetFormModal({
   const [purchaseDate, setPurchaseDate] = useState(toDateInput(asset?.purchase_date))
   const [status, setStatus] = useState<AssetStatus>(asset?.status ?? 'active')
   const [notes, setNotes] = useState(asset?.notes ?? '')
+  const [containerType, setContainerType] = useState<ContainerType | ''>(asset?.container_type ?? '')
+  const [homeRackId, setHomeRackId] = useState<number | ''>(asset?.home_rack_id ?? '')
+  const [racks, setRacks] = useState<Asset[]>([])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  // home_rack_id is edit-only metadata (see the addendum), so this list
+  // only matters in edit mode — and an asset can't be a member of a rack
+  // while also being a container itself, so the field is hidden whenever
+  // containerType is set.
+  useEffect(() => {
+    if (!isEdit || containerType) return
+    api.get<Asset[]>('/assets?container_type=rack&status=active').then(setRacks)
+  }, [isEdit, containerType])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -70,6 +88,8 @@ export function AssetFormModal({
         purchase_date: purchaseDate ? new Date(purchaseDate).toISOString() : null,
         status,
         notes: notes.trim() || null,
+        container_type: containerType || null,
+        home_rack_id: containerType ? null : homeRackId || null,
       }
       if (isEdit) {
         await api.put(`/assets/${asset.id}`, body)
@@ -162,6 +182,42 @@ export function AssetFormModal({
                 ))}
               </select>
             </label>
+          </div>
+
+          <div className="flex gap-3">
+            <label className="flex flex-1 flex-col gap-1.5 text-[13px] font-medium">
+              Container type
+              <select
+                value={containerType}
+                onChange={(e) => setContainerType(e.target.value as ContainerType | '')}
+                className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
+              >
+                {CONTAINER_TYPE_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isEdit && !containerType && (
+              <label className="flex flex-1 flex-col gap-1.5 text-[13px] font-medium">
+                Home rack
+                <select
+                  value={homeRackId}
+                  onChange={(e) => setHomeRackId(e.target.value ? Number(e.target.value) : '')}
+                  className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
+                >
+                  <option value="">Not part of a rack</option>
+                  {racks
+                    .filter((r) => r.id !== asset?.id)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.asset_number} — {r.product_name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
           </div>
 
           <div className="flex gap-3">

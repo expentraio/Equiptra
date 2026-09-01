@@ -11,6 +11,13 @@ const (
 	AssetStatusMissing    AssetStatus = "missing"
 )
 
+type ContainerType string
+
+const (
+	ContainerTypeRack ContainerType = "rack"
+	ContainerTypeCase ContainerType = "case"
+)
+
 type ProjectStatus string
 
 const (
@@ -101,8 +108,14 @@ type Asset struct {
 	PurchaseDate     *time.Time  `json:"purchase_date,omitempty"`
 	Status           AssetStatus `json:"status"`
 	Notes            *string     `json:"notes,omitempty"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
+	// ContainerType marks this asset as a rack or case; nil for an ordinary
+	// (non-container) asset. See docs/equiptra-racks-cases-addendum.md.
+	ContainerType *ContainerType `json:"container_type,omitempty"`
+	// HomeRackID is this asset's permanent rack membership, if any — set
+	// and cleared only via manual edit (admin-only), never at creation.
+	HomeRackID *int64    `json:"home_rack_id,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 
 	// Populated on read (joined) endpoints only.
 	ProductName     *string `json:"product_name,omitempty"`
@@ -112,6 +125,10 @@ type Asset struct {
 	// service_records entry — excluded from future allocations regardless
 	// of Status; see assetHasOpenFault in service_records.go.
 	HasOpenFault bool `json:"has_open_fault"`
+	// HomeRackAssetNumber is the home rack's own asset_number, joined in for
+	// display (e.g. "Home: Rack R-4") wherever this asset is shown — nil
+	// unless HomeRackID is set.
+	HomeRackAssetNumber *string `json:"home_rack_asset_number,omitempty"`
 }
 
 type Project struct {
@@ -177,8 +194,12 @@ type BookingAllocation struct {
 	ConditionInNotes      *string                 `json:"condition_in_notes,omitempty"`
 	DamageFlag            bool                    `json:"damage_flag"`
 	DamageServiceRecordID *int64                  `json:"damage_service_record_id,omitempty"`
-	CreatedAt             time.Time               `json:"created_at"`
-	UpdatedAt             time.Time               `json:"updated_at"`
+	// ReturnToHomeRack is only meaningful when the asset has a home_rack_id —
+	// true means it was pulled individually (not via its own rack's cascade)
+	// and should be returned to that rack, surfaced as a check-in reminder.
+	ReturnToHomeRack bool      `json:"return_to_home_rack"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 
 	// Populated on read (joined) endpoints only.
 	AssetNumber      *string `json:"asset_number,omitempty"`
@@ -187,6 +208,15 @@ type BookingAllocation struct {
 	ProductName      *string `json:"product_name,omitempty"`
 	CheckedOutByName *string `json:"checked_out_by_name,omitempty"`
 	CheckedInByName  *string `json:"checked_in_by_name,omitempty"`
+	// HomeRackID/HomeRackAssetNumber mirror the underlying asset's own
+	// fields — included here so the check-in reminder UI doesn't need a
+	// second asset lookup. Only meaningful alongside ReturnToHomeRack.
+	HomeRackID          *int64  `json:"home_rack_id,omitempty"`
+	HomeRackAssetNumber *string `json:"home_rack_asset_number,omitempty"`
+	// ContainerType mirrors the allocated asset's own container_type — lets
+	// the frontend show rack-member/case-packing UI for this allocation
+	// without a second asset lookup.
+	ContainerType *ContainerType `json:"container_type,omitempty"`
 }
 
 type ServiceRecord struct {
@@ -216,6 +246,22 @@ type ServiceRecord struct {
 	ProductName      *string `json:"product_name,omitempty"`
 	ReporterUserName *string `json:"reporter_user_name,omitempty"`
 	ResolvedByName   *string `json:"resolved_by_name,omitempty"`
+}
+
+// CaseContents is one item packed into a case for a specific job — see
+// docs/equiptra-racks-cases-addendum.md. Rows are created at pack-out and
+// deleted at check-in.
+type CaseContents struct {
+	ID                  int64     `json:"id"`
+	CaseAssetID         int64     `json:"case_asset_id"`
+	ContentAssetID      int64     `json:"content_asset_id"`
+	BookingAllocationID int64     `json:"booking_allocation_id"`
+	CreatedAt           time.Time `json:"created_at"`
+
+	// Populated on read (joined) endpoints only.
+	ContentAssetNumber  *string `json:"content_asset_number,omitempty"`
+	ContentSerialNumber *string `json:"content_serial_number,omitempty"`
+	ContentProductName  *string `json:"content_product_name,omitempty"`
 }
 
 type User struct {

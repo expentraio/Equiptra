@@ -1,4 +1,5 @@
 export type AssetStatus = 'active' | 'written_off' | 'sold' | 'missing'
+export type ContainerType = 'rack' | 'case'
 export type ProjectStatus = 'tentative' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled'
 export type BookingRequestStatus = 'draft' | 'reserved' | 'partially_allocated' | 'out' | 'returned' | 'cancelled'
 export type BookingAllocationStatus = 'allocated' | 'checked_out' | 'returned'
@@ -37,12 +38,15 @@ export interface Asset {
   purchase_date?: string
   status: AssetStatus
   notes?: string
+  container_type?: ContainerType
+  home_rack_id?: number
   created_at: string
   updated_at: string
   product_name?: string
   category?: string
   product_image_url?: string
   has_open_fault: boolean
+  home_rack_asset_number?: string
 }
 
 export interface ProductListItem extends Product {
@@ -120,6 +124,7 @@ export interface BookingAllocation {
   condition_in_notes?: string
   damage_flag: boolean
   damage_service_record_id?: number
+  return_to_home_rack: boolean
   created_at: string
   updated_at: string
   asset_number?: string
@@ -128,6 +133,20 @@ export interface BookingAllocation {
   product_name?: string
   checked_out_by_name?: string
   checked_in_by_name?: string
+  home_rack_id?: number
+  home_rack_asset_number?: string
+  container_type?: ContainerType
+}
+
+export interface CaseContents {
+  id: number
+  case_asset_id: number
+  content_asset_id: number
+  booking_allocation_id: number
+  created_at: string
+  content_asset_number?: string
+  content_serial_number?: string
+  content_product_name?: string
 }
 
 export interface AllocationConflict {

@@ -151,6 +151,7 @@ func (a *API) ListProductAssets(w http.ResponseWriter, r *http.Request) {
 	assetRows, err := a.DB.Query(r.Context(), `
 		SELECT `+assetSelectCols+`
 		FROM assets a JOIN products p ON p.id = a.product_id
+		`+assetSelectJoins+`
 		WHERE a.product_id = $1
 		ORDER BY a.asset_number NULLS LAST`, id)
 	if err != nil {

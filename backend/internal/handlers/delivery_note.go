@@ -45,9 +45,28 @@ func (a *API) buildDeliveryNoteView(r *http.Request, projectID int64) (*delivery
 		return nil, err
 	}
 
+	// container_asset_id is non-null when this allocation's asset is
+	// currently packed/homed inside a rack or case that's also
+	// allocated/checked_out on this same project — return_to_home_rack=false
+	// uniquely identifies a rack cascade (only ever set by
+	// applyContainerCascade, never by a normal individual pick); a case
+	// cascade is identified via case_contents instead, scoped to the case's
+	// own currently-active allocation on this project. Either way the
+	// content item folds into its container's single line rather than
+	// getting one of its own — see docs/equiptra-racks-cases-addendum.md.
 	rows, err := a.DB.Query(r.Context(), `
 		SELECT p.name, p.is_accessory, a.id, a.asset_number, a.serial_number, a.is_bulk,
-		       COALESCE(p.weight_kg, 0), COALESCE(a.replacement_value, 0)
+		       COALESCE(p.weight_kg, 0), COALESCE(a.replacement_value, 0),
+		       COALESCE(
+		           (SELECT rack.id FROM assets rack
+		            WHERE rack.id = a.home_rack_id AND ba.return_to_home_rack = false),
+		           (SELECT cc.case_asset_id FROM case_contents cc
+		            JOIN booking_allocations case_ba ON case_ba.id = cc.booking_allocation_id
+		            JOIN booking_requests case_br ON case_br.id = case_ba.booking_request_id
+		            WHERE cc.content_asset_id = a.id AND case_br.project_id = $1
+		              AND case_ba.status IN ('allocated', 'checked_out')
+		            LIMIT 1)
+		       ) AS container_asset_id
 		FROM booking_allocations ba
 		JOIN booking_requests br ON br.id = ba.booking_request_id
 		JOIN assets a ON a.id = ba.asset_id
@@ -60,35 +79,73 @@ func (a *API) buildDeliveryNoteView(r *http.Request, projectID int64) (*delivery
 	defer rows.Close()
 
 	view := &deliveryNoteView{Project: project, Lines: []DeliveryNoteLine{}}
-	bulkLineIndex := map[int64]int{} // asset_id -> index into view.Lines, for grouping bulk units
+	bulkLineIndex := map[int64]int{}  // asset_id -> index into view.Lines, for grouping bulk units
+	containerLines := map[int64]int{} // container asset_id -> index into view.Lines
 
+	type row struct {
+		name                       string
+		isAccessory                bool
+		assetID                    int64
+		assetNumber, serialNumber  *string
+		isBulk                     bool
+		weightKg, replacementValue float64
+		containerAssetID           *int64
+	}
+	var allRows []row
 	for rows.Next() {
-		var name string
-		var isAccessory bool
-		var assetID int64
-		var assetNumber, serialNumber *string
-		var isBulk bool
-		var weightKg, replacementValue float64
-		if err := rows.Scan(&name, &isAccessory, &assetID, &assetNumber, &serialNumber, &isBulk, &weightKg, &replacementValue); err != nil {
+		var rr row
+		if err := rows.Scan(&rr.name, &rr.isAccessory, &rr.assetID, &rr.assetNumber, &rr.serialNumber, &rr.isBulk,
+			&rr.weightKg, &rr.replacementValue, &rr.containerAssetID); err != nil {
 			return nil, err
 		}
-		view.TotalWeightKg += weightKg
-		view.TotalValue += replacementValue
+		allRows = append(allRows, rr)
+		view.TotalWeightKg += rr.weightKg
+		view.TotalValue += rr.replacementValue
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
-		if isBulk {
-			if idx, ok := bulkLineIndex[assetID]; ok {
+	// Two passes: containers (and any non-contained asset) first, so a
+	// content item's own row (processed second) always has its container's
+	// line already in view.Lines to fold into, regardless of query order.
+	for _, rr := range allRows {
+		if rr.containerAssetID != nil {
+			continue
+		}
+		if rr.isBulk {
+			if idx, ok := bulkLineIndex[rr.assetID]; ok {
 				view.Lines[idx].Quantity++
 				continue
 			}
-			bulkLineIndex[assetID] = len(view.Lines)
-			view.Lines = append(view.Lines, DeliveryNoteLine{Description: name, Quantity: 1, IsAccessory: isAccessory})
+			bulkLineIndex[rr.assetID] = len(view.Lines)
+			view.Lines = append(view.Lines, DeliveryNoteLine{Description: rr.name, Quantity: 1, IsAccessory: rr.isAccessory})
+			continue
+		}
+		containerLines[rr.assetID] = len(view.Lines)
+		view.Lines = append(view.Lines, DeliveryNoteLine{
+			Description: rr.name, Quantity: 1, AssetNumber: rr.assetNumber, SerialNumber: rr.serialNumber, IsAccessory: rr.isAccessory,
+		})
+	}
+	for _, rr := range allRows {
+		if rr.containerAssetID == nil {
+			continue
+		}
+		// A content item folds into its container's existing line — the
+		// container still shows as "1x", not one per item inside it (weight
+		// and value are already captured in the document-level totals
+		// above, summed from every row regardless of folding). Falls back
+		// to its own line if the container itself somehow isn't on this
+		// project's allocation list (shouldn't happen in practice — the
+		// cascade always allocates the container first).
+		if _, ok := containerLines[*rr.containerAssetID]; ok {
 			continue
 		}
 		view.Lines = append(view.Lines, DeliveryNoteLine{
-			Description: name, Quantity: 1, AssetNumber: assetNumber, SerialNumber: serialNumber, IsAccessory: isAccessory,
+			Description: rr.name, Quantity: 1, AssetNumber: rr.assetNumber, SerialNumber: rr.serialNumber, IsAccessory: rr.isAccessory,
 		})
 	}
-	return view, rows.Err()
+	return view, nil
 }
 
 func (a *API) GetDeliveryNoteView(w http.ResponseWriter, r *http.Request) {

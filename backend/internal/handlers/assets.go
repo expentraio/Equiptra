@@ -15,16 +15,23 @@ import (
 const assetSelectCols = `
 	a.id, a.legacy_id, a.product_id, a.asset_number, a.serial_number, a.is_bulk, a.quantity,
 	a.location, a.purchase_price, a.replacement_value, a.purchase_date, a.status, a.notes,
-	a.created_at, a.updated_at, p.name, p.category, p.image_url,
-	EXISTS(SELECT 1 FROM service_records sr WHERE sr.asset_id = a.id AND sr.status IN ('open', 'in_progress')) AS has_open_fault`
+	a.container_type, a.home_rack_id, a.created_at, a.updated_at, p.name, p.category, p.image_url,
+	EXISTS(SELECT 1 FROM service_records sr WHERE sr.asset_id = a.id AND sr.status IN ('open', 'in_progress')) AS has_open_fault,
+	hr.asset_number`
+
+// assetSelectJoins must follow "FROM assets a JOIN products p ON p.id = a.product_id" —
+// adds the home-rack lookup used by assetSelectCols' last column.
+const assetSelectJoins = `
+	LEFT JOIN assets hr ON hr.id = a.home_rack_id`
 
 func scanAsset(row pgx.Row) (models.Asset, error) {
 	var asset models.Asset
 	err := row.Scan(&asset.ID, &asset.LegacyID, &asset.ProductID, &asset.AssetNumber,
 		&asset.SerialNumber, &asset.IsBulk, &asset.Quantity, &asset.Location,
 		&asset.PurchasePrice, &asset.ReplacementValue, &asset.PurchaseDate, &asset.Status,
-		&asset.Notes, &asset.CreatedAt, &asset.UpdatedAt, &asset.ProductName, &asset.Category, &asset.ProductImageURL,
-		&asset.HasOpenFault)
+		&asset.Notes, &asset.ContainerType, &asset.HomeRackID, &asset.CreatedAt, &asset.UpdatedAt,
+		&asset.ProductName, &asset.Category, &asset.ProductImageURL,
+		&asset.HasOpenFault, &asset.HomeRackAssetNumber)
 	return asset, err
 }
 
@@ -36,19 +43,22 @@ func (a *API) ListAssets(w http.ResponseWriter, r *http.Request) {
 	category := q.Get("category")
 	status := q.Get("status")
 	productID := q.Get("product_id")
+	containerType := q.Get("container_type")
 
 	rows, err := a.DB.Query(r.Context(), `
 		SELECT `+assetSelectCols+`
 		FROM assets a
 		JOIN products p ON p.id = a.product_id
+		`+assetSelectJoins+`
 		WHERE ($1 = '' OR p.name ILIKE '%' || $1 || '%'
 		           OR a.asset_number ILIKE '%' || $1 || '%'
 		           OR a.serial_number ILIKE '%' || $1 || '%')
 		  AND ($2 = '' OR p.category = $2)
 		  AND ($3 = '' OR a.status::text = $3)
 		  AND ($4 = '' OR a.product_id = $4::bigint)
+		  AND ($5 = '' OR a.container_type::text = $5)
 		ORDER BY p.name, a.asset_number NULLS LAST`,
-		search, category, status, productID,
+		search, category, status, productID, containerType,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
@@ -77,6 +87,7 @@ func (a *API) GetAsset(w http.ResponseWriter, r *http.Request) {
 	asset, err := scanAsset(a.DB.QueryRow(r.Context(), `
 		SELECT `+assetSelectCols+`
 		FROM assets a JOIN products p ON p.id = a.product_id
+		`+assetSelectJoins+`
 		WHERE a.id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "asset not found")
@@ -90,17 +101,20 @@ func (a *API) GetAsset(w http.ResponseWriter, r *http.Request) {
 }
 
 type assetWriteRequest struct {
-	ProductID        int64              `json:"product_id"`
-	AssetNumber      *string            `json:"asset_number"`
-	SerialNumber     *string            `json:"serial_number"`
-	IsBulk           bool               `json:"is_bulk"`
-	Quantity         int                `json:"quantity"`
-	Location         *string            `json:"location"`
-	PurchasePrice    *float64           `json:"purchase_price"`
-	ReplacementValue *float64           `json:"replacement_value"`
-	PurchaseDate     *time.Time         `json:"purchase_date"`
-	Status           models.AssetStatus `json:"status"`
-	Notes            *string            `json:"notes"`
+	ProductID        int64                 `json:"product_id"`
+	AssetNumber      *string               `json:"asset_number"`
+	SerialNumber     *string               `json:"serial_number"`
+	IsBulk           bool                  `json:"is_bulk"`
+	Quantity         int                   `json:"quantity"`
+	Location         *string               `json:"location"`
+	PurchasePrice    *float64              `json:"purchase_price"`
+	ReplacementValue *float64              `json:"replacement_value"`
+	PurchaseDate     *time.Time            `json:"purchase_date"`
+	Status           models.AssetStatus    `json:"status"`
+	Notes            *string               `json:"notes"`
+	ContainerType    *models.ContainerType `json:"container_type"`
+	// HomeRackID is intentionally not read here — see CreateAsset/UpdateAsset.
+	HomeRackID *int64 `json:"home_rack_id"`
 }
 
 func (a *API) CreateAsset(w http.ResponseWriter, r *http.Request) {
@@ -114,14 +128,19 @@ func (a *API) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// home_rack_id is never set at creation — it's edit-only metadata (see
+	// the addendum: "Set/cleared only via manual edit") and UpdateAsset is
+	// admin-gated while CreateAsset isn't, so accepting it here would let a
+	// standard user assign rack membership through the back door.
 	var id int64
 	err := a.DB.QueryRow(r.Context(), `
 		INSERT INTO assets (product_id, asset_number, serial_number, is_bulk, quantity,
-		                     location, purchase_price, replacement_value, purchase_date, status, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		                     location, purchase_price, replacement_value, purchase_date, status, notes, container_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id`,
 		req.ProductID, req.AssetNumber, req.SerialNumber, req.IsBulk, quantityOrDefault(req),
 		req.Location, req.PurchasePrice, req.ReplacementValue, req.PurchaseDate, statusOrDefault(req), req.Notes,
+		req.ContainerType,
 	).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "insert failed: "+err.Error())
@@ -129,7 +148,7 @@ func (a *API) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	asset, err := scanAsset(a.DB.QueryRow(r.Context(), `
-		SELECT `+assetSelectCols+` FROM assets a JOIN products p ON p.id = a.product_id WHERE a.id = $1`, id))
+		SELECT `+assetSelectCols+` FROM assets a JOIN products p ON p.id = a.product_id `+assetSelectJoins+` WHERE a.id = $1`, id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "fetch after insert failed")
 		return
@@ -137,6 +156,8 @@ func (a *API) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, asset)
 }
 
+// UpdateAsset is admin-only (see cmd/api/main.go) — the one place
+// home_rack_id can be set or cleared, per the addendum.
 func (a *API) UpdateAsset(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -152,14 +173,31 @@ func (a *API) UpdateAsset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if req.HomeRackID != nil {
+		var rackContainerType *models.ContainerType
+		err := a.DB.QueryRow(r.Context(), `SELECT container_type FROM assets WHERE id = $1`, *req.HomeRackID).Scan(&rackContainerType)
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusBadRequest, "home_rack_id does not refer to an existing asset")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "rack lookup failed")
+			return
+		}
+		if rackContainerType == nil || *rackContainerType != models.ContainerTypeRack {
+			writeError(w, http.StatusBadRequest, "home_rack_id must refer to an asset with container_type=rack")
+			return
+		}
+	}
 
 	tag, err := a.DB.Exec(r.Context(), `
 		UPDATE assets SET product_id=$1, asset_number=$2, serial_number=$3, is_bulk=$4, quantity=$5,
 		       location=$6, purchase_price=$7, replacement_value=$8, purchase_date=$9, status=$10,
-		       notes=$11, updated_at=now()
-		WHERE id=$12`,
+		       notes=$11, container_type=$12, home_rack_id=$13, updated_at=now()
+		WHERE id=$14`,
 		req.ProductID, req.AssetNumber, req.SerialNumber, req.IsBulk, quantityOrDefault(req),
-		req.Location, req.PurchasePrice, req.ReplacementValue, req.PurchaseDate, statusOrDefault(req), req.Notes, id,
+		req.Location, req.PurchasePrice, req.ReplacementValue, req.PurchaseDate, statusOrDefault(req), req.Notes,
+		req.ContainerType, req.HomeRackID, id,
 	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "update failed: "+err.Error())
@@ -171,7 +209,7 @@ func (a *API) UpdateAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	asset, err := scanAsset(a.DB.QueryRow(r.Context(), `
-		SELECT `+assetSelectCols+` FROM assets a JOIN products p ON p.id = a.product_id WHERE a.id = $1`, id))
+		SELECT `+assetSelectCols+` FROM assets a JOIN products p ON p.id = a.product_id `+assetSelectJoins+` WHERE a.id = $1`, id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "fetch after update failed")
 		return
@@ -220,6 +258,7 @@ func (a *API) GetAssetHistory(w http.ResponseWriter, r *http.Request) {
 		JOIN products p ON p.id = a.product_id
 		LEFT JOIN users uo ON uo.id = ba.checked_out_by
 		LEFT JOIN users ui ON ui.id = ba.checked_in_by
+		LEFT JOIN assets hr ON hr.id = a.home_rack_id
 		JOIN booking_requests br ON br.id = ba.booking_request_id
 		JOIN projects pr ON pr.id = br.project_id
 		WHERE ba.asset_id = $1
@@ -234,9 +273,9 @@ func (a *API) GetAssetHistory(w http.ResponseWriter, r *http.Request) {
 		ba := &wrapped.BookingAllocation
 		if err := allocationRows.Scan(&ba.ID, &ba.BookingRequestID, &ba.AssetID, &ba.Status, &ba.CheckedOutAt, &ba.CheckedOutBy,
 			&ba.InspectionPassed, &ba.ConditionOutNotes, &ba.CheckedInAt, &ba.CheckedInBy,
-			&ba.ConditionInNotes, &ba.DamageFlag, &ba.DamageServiceRecordID, &ba.CreatedAt, &ba.UpdatedAt,
+			&ba.ConditionInNotes, &ba.DamageFlag, &ba.DamageServiceRecordID, &ba.ReturnToHomeRack, &ba.CreatedAt, &ba.UpdatedAt,
 			&ba.AssetNumber, &ba.SerialNumber, &ba.IsBulk, &ba.ProductName,
-			&ba.CheckedOutByName, &ba.CheckedInByName,
+			&ba.CheckedOutByName, &ba.CheckedInByName, &ba.HomeRackID, &ba.HomeRackAssetNumber, &ba.ContainerType,
 			&wrapped.ProjectName, &wrapped.DateOut, &wrapped.DateIn); err != nil {
 			allocationRows.Close()
 			writeError(w, http.StatusInternalServerError, "scan failed")

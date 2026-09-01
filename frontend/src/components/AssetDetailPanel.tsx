@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
-import type { Asset, BookingAllocation, Product, ServiceRecord } from '../types'
+import type { Asset, BookingAllocation, CaseContents, Product, ServiceRecord } from '../types'
 import { AssetTag } from './AssetTag'
 import { ProductThumbnail } from './ProductThumbnail'
 import { CloseIcon, UploadIcon } from './icons'
+
+const containerTypeLabel: Record<NonNullable<Asset['container_type']>, string> = {
+  rack: 'Rack',
+  case: 'Case',
+}
 
 const statusLabel: Record<Asset['status'], string> = {
   active: 'Active',
@@ -46,6 +51,8 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [rackMembers, setRackMembers] = useState<Asset[] | null>(null)
+  const [caseContents, setCaseContents] = useState<CaseContents[] | null>(null)
 
   async function handlePhotoSelected(file: File) {
     setUploading(true)
@@ -75,6 +82,24 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
       cancelled = true
     }
   }, [asset.id])
+
+  useEffect(() => {
+    if (asset.container_type === 'rack') {
+      api.get<Asset[]>(`/assets/${asset.id}/rack-members`).then(setRackMembers)
+    }
+  }, [asset.id, asset.container_type])
+
+  // A case has no contents between jobs — only fetch if there's a currently
+  // active (allocated/checked_out) allocation for it to be packed against.
+  useEffect(() => {
+    if (asset.container_type !== 'case') return
+    const active = allocations.find((a) => a.status === 'allocated' || a.status === 'checked_out')
+    if (!active) {
+      setCaseContents([])
+      return
+    }
+    api.get<CaseContents[]>(`/booking-allocations/${active.id}/case-contents`).then(setCaseContents)
+  }, [asset.id, asset.container_type, allocations])
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-[rgba(15,23,42,.35)]" onClick={onClose}>
@@ -135,9 +160,53 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
           }
         />
         {asset.is_bulk && <Row label="Quantity held" value={String(asset.quantity)} />}
+        {asset.container_type && <Row label="Container" value={containerTypeLabel[asset.container_type]} />}
+        {asset.home_rack_id && <Row label="Home rack" value={`Rack ${asset.home_rack_asset_number ?? asset.home_rack_id}`} />}
         <Row label="Replacement value" value={asset.replacement_value != null ? `£${asset.replacement_value.toLocaleString()}` : '—'} />
         <Row label="Purchase price" value={asset.purchase_price != null ? `£${asset.purchase_price.toLocaleString()}` : '—'} />
         <Row label="Purchase date" value={formatDate(asset.purchase_date) || '—'} />
+
+        {asset.container_type === 'rack' && (
+          <>
+            <div className="mb-2.5 mt-5.5 text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">
+              Rack contents
+            </div>
+            {rackMembers === null ? (
+              <div className="py-2 text-[12.5px] text-ink-soft">Loading…</div>
+            ) : rackMembers.length ? (
+              rackMembers.map((m) => (
+                <div key={m.id} className="flex items-center justify-between border-b border-border py-2.25 text-[13px]">
+                  <span className="font-medium">{m.product_name}</span>
+                  <AssetTag number={m.asset_number} />
+                </div>
+              ))
+            ) : (
+              <div className="border-b border-border py-2.5 text-[12.5px] text-ink-soft">No items currently in this rack</div>
+            )}
+          </>
+        )}
+
+        {asset.container_type === 'case' && (
+          <>
+            <div className="mb-2.5 mt-5.5 text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">
+              Case contents
+            </div>
+            {caseContents === null ? (
+              <div className="py-2 text-[12.5px] text-ink-soft">Loading…</div>
+            ) : caseContents.length ? (
+              caseContents.map((c) => (
+                <div key={c.id} className="flex items-center justify-between border-b border-border py-2.25 text-[13px]">
+                  <span className="font-medium">{c.content_product_name}</span>
+                  <AssetTag number={c.content_asset_number} />
+                </div>
+              ))
+            ) : (
+              <div className="border-b border-border py-2.5 text-[12.5px] text-ink-soft">
+                Empty between bookings — packed at pack-out for its next job
+              </div>
+            )}
+          </>
+        )}
 
         <div className="mb-2.5 mt-5.5 text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">
           Booking history

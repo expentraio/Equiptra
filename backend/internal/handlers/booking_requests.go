@@ -121,7 +121,7 @@ func computeShortage(ctx context.Context, db *pgxpool.Pool, productID int64, qua
 // recomputeBookingRequestStatus derives status from its allocations rather
 // than trusting a manually-set value, except for 'cancelled' which is a
 // deliberate user action left untouched here.
-func recomputeBookingRequestStatus(ctx context.Context, db *pgxpool.Pool, requestID int64) error {
+func recomputeBookingRequestStatus(ctx context.Context, db dbExecutor, requestID int64) error {
 	var productID *int64
 	var quantityRequested int
 	var currentStatus models.BookingRequestStatus

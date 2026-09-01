@@ -2,13 +2,14 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"equiptra/internal/middleware"
 	"equiptra/internal/models"
@@ -17,21 +18,23 @@ import (
 const allocationSelectCols = `
 	ba.id, ba.booking_request_id, ba.asset_id, ba.status, ba.checked_out_at, ba.checked_out_by,
 	ba.inspection_passed, ba.condition_out_notes, ba.checked_in_at, ba.checked_in_by,
-	ba.condition_in_notes, ba.damage_flag, ba.damage_service_record_id, ba.created_at, ba.updated_at,
+	ba.condition_in_notes, ba.damage_flag, ba.damage_service_record_id, ba.return_to_home_rack,
+	ba.created_at, ba.updated_at,
 	a.asset_number, a.serial_number, a.is_bulk, p.name,
-	uo.name, ui.name`
+	uo.name, ui.name, a.home_rack_id, hr.asset_number, a.container_type`
 
 func scanAllocation(row pgx.Row) (models.BookingAllocation, error) {
 	var ba models.BookingAllocation
 	err := row.Scan(&ba.ID, &ba.BookingRequestID, &ba.AssetID, &ba.Status, &ba.CheckedOutAt, &ba.CheckedOutBy,
 		&ba.InspectionPassed, &ba.ConditionOutNotes, &ba.CheckedInAt, &ba.CheckedInBy,
-		&ba.ConditionInNotes, &ba.DamageFlag, &ba.DamageServiceRecordID, &ba.CreatedAt, &ba.UpdatedAt,
+		&ba.ConditionInNotes, &ba.DamageFlag, &ba.DamageServiceRecordID, &ba.ReturnToHomeRack,
+		&ba.CreatedAt, &ba.UpdatedAt,
 		&ba.AssetNumber, &ba.SerialNumber, &ba.IsBulk, &ba.ProductName,
-		&ba.CheckedOutByName, &ba.CheckedInByName)
+		&ba.CheckedOutByName, &ba.CheckedInByName, &ba.HomeRackID, &ba.HomeRackAssetNumber, &ba.ContainerType)
 	return ba, err
 }
 
-func queryAllocations(ctx context.Context, db *pgxpool.Pool, whereClause string, args ...interface{}) ([]models.BookingAllocation, error) {
+func queryAllocations(ctx context.Context, db dbExecutor, whereClause string, args ...interface{}) ([]models.BookingAllocation, error) {
 	rows, err := db.Query(ctx, `
 		SELECT `+allocationSelectCols+`
 		FROM booking_allocations ba
@@ -39,6 +42,7 @@ func queryAllocations(ctx context.Context, db *pgxpool.Pool, whereClause string,
 		JOIN products p ON p.id = a.product_id
 		LEFT JOIN users uo ON uo.id = ba.checked_out_by
 		LEFT JOIN users ui ON ui.id = ba.checked_in_by
+		LEFT JOIN assets hr ON hr.id = a.home_rack_id
 		`+whereClause, args...)
 	if err != nil {
 		return nil, err
@@ -70,7 +74,7 @@ type AllocationConflict struct {
 	Status           string    `json:"status"`
 }
 
-func findAllocationConflicts(ctx context.Context, db *pgxpool.Pool, assetID int64, dateOut, dateIn time.Time, excludeAllocationID *int64) ([]AllocationConflict, error) {
+func findAllocationConflicts(ctx context.Context, db dbExecutor, assetID int64, dateOut, dateIn time.Time, excludeAllocationID *int64) ([]AllocationConflict, error) {
 	rows, err := db.Query(ctx, `
 		SELECT ba.id, ba.booking_request_id, pr.name, br.date_out, br.date_in, ba.status
 		FROM booking_allocations ba
@@ -102,7 +106,7 @@ func findAllocationConflicts(ctx context.Context, db *pgxpool.Pool, assetID int6
 // bulk asset whose parent request's dates overlap — compared against the
 // asset's held quantity to catch over-committing a bulk line, since many
 // concurrent allocations sharing one bulk asset_id is normal, not a conflict.
-func bulkOverAllocationCount(ctx context.Context, db *pgxpool.Pool, assetID int64, dateOut, dateIn time.Time, excludeAllocationID *int64) (int, error) {
+func bulkOverAllocationCount(ctx context.Context, db dbExecutor, assetID int64, dateOut, dateIn time.Time, excludeAllocationID *int64) (int, error) {
 	var count int
 	err := db.QueryRow(ctx, `
 		SELECT COUNT(*)
@@ -317,10 +321,16 @@ func (a *API) DeleteAllocation(w http.ResponseWriter, r *http.Request) {
 type checkoutRequest struct {
 	InspectionPassed  bool    `json:"inspection_passed"`
 	ConditionOutNotes *string `json:"condition_out_notes"`
+	// Override, like allocateRequest.Override, resubmits past a 409 raised
+	// by a rack/case's contents being unavailable — see planContainerCascade.
+	Override bool `json:"override"`
 }
 
 // CheckoutAllocation hard-blocks unless inspection_passed is true, per the
 // brief — the DB's chk_checkout_requires_inspection constraint backs this up.
+// If this allocation's asset is a rack or case, checkout cascades to its
+// current contents (planContainerCascade/applyContainerCascade) — see
+// docs/equiptra-racks-cases-addendum.md.
 func (a *API) CheckoutAllocation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -338,22 +348,80 @@ func (a *API) CheckoutAllocation(w http.ResponseWriter, r *http.Request) {
 	}
 	claims, _ := middleware.UserFromContext(r.Context())
 
-	var requestID int64
+	var assetID, requestID, projectID int64
+	var containerType *models.ContainerType
+	var dateOut, dateIn time.Time
+	var currentStatus models.BookingAllocationStatus
 	err = a.DB.QueryRow(r.Context(), `
-		UPDATE booking_allocations
-		SET status = 'checked_out', checked_out_at = now(), checked_out_by = $1,
-		    inspection_passed = true, condition_out_notes = $2, updated_at = now()
-		WHERE id = $3 AND status = 'allocated'
-		RETURNING booking_request_id`,
-		claims.UserID, req.ConditionOutNotes, id,
-	).Scan(&requestID)
+		SELECT ba.asset_id, ba.booking_request_id, br.project_id, br.date_out, br.date_in, a.container_type, ba.status
+		FROM booking_allocations ba
+		JOIN booking_requests br ON br.id = ba.booking_request_id
+		JOIN assets a ON a.id = ba.asset_id
+		WHERE ba.id = $1`, id,
+	).Scan(&assetID, &requestID, &projectID, &dateOut, &dateIn, &containerType, &currentStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "allocation not found")
+		return
+	}
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if currentStatus != models.BookingAllocationStatusAllocated {
 		writeError(w, http.StatusConflict, "checkout failed — allocation not found or already checked out")
 		return
 	}
 
-	if err := recomputeBookingRequestStatus(r.Context(), a.DB, requestID); err != nil {
+	var plan *cascadePlan
+	if containerType != nil {
+		plan, err = planContainerCascade(r.Context(), a.DB, assetID, *containerType, id, dateOut, dateIn)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "container content check failed: "+err.Error())
+			return
+		}
+		if len(plan.Conflicts) > 0 && !req.Override {
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":     "container content conflict",
+				"message":   fmt.Sprintf("%d item(s) in this %s are already committed elsewhere for overlapping dates", len(plan.Conflicts), *containerType),
+				"conflicts": plan.Conflicts,
+				"skipped":   plan.Skipped,
+			})
+			return
+		}
+	}
+
+	tx, err := a.DB.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "checkout failed")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	if _, err := tx.Exec(r.Context(), `
+		UPDATE booking_allocations
+		SET status = 'checked_out', checked_out_at = now(), checked_out_by = $1,
+		    inspection_passed = true, condition_out_notes = $2, updated_at = now()
+		WHERE id = $3`,
+		claims.UserID, req.ConditionOutNotes, id,
+	); err != nil {
+		writeError(w, http.StatusInternalServerError, "checkout failed: "+err.Error())
+		return
+	}
+
+	if plan != nil && len(plan.Items) > 0 {
+		if err := applyContainerCascade(r.Context(), tx, plan, *containerType, projectID, dateOut, dateIn, claims.UserID); err != nil {
+			writeError(w, http.StatusInternalServerError, "checkout failed: "+err.Error())
+			return
+		}
+	}
+
+	if err := recomputeBookingRequestStatus(r.Context(), tx, requestID); err != nil {
 		writeError(w, http.StatusInternalServerError, "status recompute failed")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "checkout failed")
 		return
 	}
 
@@ -362,7 +430,19 @@ func (a *API) CheckoutAllocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "fetch after checkout failed")
 		return
 	}
-	writeJSON(w, http.StatusOK, allocations[0])
+	resp := map[string]interface{}{"allocation": allocations[0]}
+	if plan != nil {
+		if len(plan.Items) > 0 {
+			resp["cascaded_count"] = len(plan.Items)
+		}
+		if len(plan.Skipped) > 0 {
+			resp["skipped"] = plan.Skipped
+		}
+		if len(plan.Conflicts) > 0 {
+			resp["conflicts"] = plan.Conflicts
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type checkinRequest struct {
@@ -373,7 +453,12 @@ type checkinRequest struct {
 
 // CheckinAllocation marks an allocation returned and, if damage_flag is set,
 // auto-creates a service_records row (source=checkin_damage) linked back via
-// damage_service_record_id — no separate manual reporting step.
+// damage_service_record_id — no separate manual reporting step. If this
+// allocation's asset is a rack or case, check-in cascades to its contents'
+// own allocations too (cascadeCheckin) — see
+// docs/equiptra-racks-cases-addendum.md. Damage on a container itself is
+// reported the normal way here; damage on a content item goes through its
+// own check-in/fault-report path separately, unaffected by this cascade.
 func (a *API) CheckinAllocation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -388,8 +473,12 @@ func (a *API) CheckinAllocation(w http.ResponseWriter, r *http.Request) {
 	claims, _ := middleware.UserFromContext(r.Context())
 
 	var assetID, requestID int64
-	err = a.DB.QueryRow(r.Context(), `SELECT asset_id, booking_request_id FROM booking_allocations WHERE id = $1 AND status = 'checked_out'`, id).
-		Scan(&assetID, &requestID)
+	var containerType *models.ContainerType
+	err = a.DB.QueryRow(r.Context(), `
+		SELECT ba.asset_id, ba.booking_request_id, a.container_type
+		FROM booking_allocations ba JOIN assets a ON a.id = ba.asset_id
+		WHERE ba.id = $1 AND ba.status = 'checked_out'`, id).
+		Scan(&assetID, &requestID, &containerType)
 	if err != nil {
 		writeError(w, http.StatusConflict, "check-in failed — allocation not found or not currently checked out")
 		return
@@ -416,7 +505,14 @@ func (a *API) CheckinAllocation(w http.ResponseWriter, r *http.Request) {
 		damageServiceRecordID = &recordID
 	}
 
-	_, err = a.DB.Exec(r.Context(), `
+	tx, err := a.DB.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "check-in failed")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	_, err = tx.Exec(r.Context(), `
 		UPDATE booking_allocations
 		SET status = 'returned', checked_in_at = now(), checked_in_by = $1,
 		    condition_in_notes = $2, damage_flag = $3, damage_service_record_id = $4, updated_at = now()
@@ -428,8 +524,20 @@ func (a *API) CheckinAllocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := recomputeBookingRequestStatus(r.Context(), a.DB, requestID); err != nil {
+	if containerType != nil {
+		if err := cascadeCheckin(r.Context(), tx, assetID, *containerType, id, claims.UserID); err != nil {
+			writeError(w, http.StatusInternalServerError, "check-in failed: "+err.Error())
+			return
+		}
+	}
+
+	if err := recomputeBookingRequestStatus(r.Context(), tx, requestID); err != nil {
 		writeError(w, http.StatusInternalServerError, "status recompute failed")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "check-in failed")
 		return
 	}
 
