@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -123,6 +124,10 @@ func (a *API) CreateProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, p)
 }
 
+// UpdateProject edits the project's descriptive fields. Status changes go
+// through UpdateProjectStatus instead — a dedicated endpoint so the
+// active-allocation warning (see below) can't be bypassed by editing status
+// as a side effect of an unrelated field edit.
 func (a *API) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -140,11 +145,11 @@ func (a *API) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p, err := scanProject(a.DB.QueryRow(r.Context(), `
-		UPDATE projects SET name=$1, client=$2, start_date=$3, end_date=$4, status=$5,
-		       carnet_required=$6, client_reference=$7, order_number=$8, delivery_address=$9, notes=$10, updated_at=now()
-		WHERE id=$11
+		UPDATE projects SET name=$1, client=$2, start_date=$3, end_date=$4,
+		       carnet_required=$5, client_reference=$6, order_number=$7, delivery_address=$8, notes=$9, updated_at=now()
+		WHERE id=$10
 		RETURNING `+projectSelectCols,
-		req.Name, req.Client, req.StartDate, req.EndDate, req.statusOrDefault(), req.CarnetRequired,
+		req.Name, req.Client, req.StartDate, req.EndDate, req.CarnetRequired,
 		req.ClientReference, req.OrderNumber, req.DeliveryAddress, req.Notes, id,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -158,21 +163,87 @@ func (a *API) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
-func (a *API) CancelProject(w http.ResponseWriter, r *http.Request) {
+type projectStatusRequest struct {
+	Status   models.ProjectStatus `json:"status"`
+	Override bool                 `json:"override"`
+}
+
+var validProjectStatuses = map[models.ProjectStatus]bool{
+	models.ProjectStatusTentative:  true,
+	models.ProjectStatusConfirmed:  true,
+	models.ProjectStatusInProgress: true,
+	models.ProjectStatusCompleted:  true,
+	models.ProjectStatusCancelled:  true,
+}
+
+type projectStatusConflictAsset struct {
+	AssetID          int64                          `json:"asset_id"`
+	AssetNumber      *string                        `json:"asset_number"`
+	ProductName      string                         `json:"product_name"`
+	AllocationStatus models.BookingAllocationStatus `json:"allocation_status"`
+}
+
+// UpdateProjectStatus moves a project to any status — no transition is
+// hard-blocked, matching the app's flag-don't-block philosophy (see
+// CreateAllocation's conflict/override handling). The one soft check: moving
+// to completed or cancelled while assets are still allocated/checked_out
+// against the project returns 409 with the affected assets listed, unless
+// the caller resubmits with override=true.
+func (a *API) UpdateProjectStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
+	var req projectStatusRequest
+	if err := readJSON(r, &req); err != nil || !validProjectStatuses[req.Status] {
+		writeError(w, http.StatusBadRequest, "a valid status is required")
+		return
+	}
+
+	if !req.Override && (req.Status == models.ProjectStatusCompleted || req.Status == models.ProjectStatusCancelled) {
+		rows, err := a.DB.Query(r.Context(), `
+			SELECT a.id, a.asset_number, p.name, ba.status
+			FROM booking_allocations ba
+			JOIN booking_requests br ON br.id = ba.booking_request_id
+			JOIN assets a ON a.id = ba.asset_id
+			JOIN products p ON p.id = a.product_id
+			WHERE br.project_id = $1 AND ba.status IN ('allocated', 'checked_out')
+			ORDER BY p.name, a.asset_number NULLS LAST`, id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "allocation check failed")
+			return
+		}
+		affected := []projectStatusConflictAsset{}
+		for rows.Next() {
+			var asset projectStatusConflictAsset
+			if err := rows.Scan(&asset.AssetID, &asset.AssetNumber, &asset.ProductName, &asset.AllocationStatus); err != nil {
+				rows.Close()
+				writeError(w, http.StatusInternalServerError, "scan failed")
+				return
+			}
+			affected = append(affected, asset)
+		}
+		rows.Close()
+		if len(affected) > 0 {
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":   "active allocations",
+				"message": fmt.Sprintf("%d asset(s) are still allocated or checked out on this project", len(affected)),
+				"assets":  affected,
+			})
+			return
+		}
+	}
+
 	p, err := scanProject(a.DB.QueryRow(r.Context(), `
-		UPDATE projects SET status = 'cancelled', updated_at = now() WHERE id = $1
-		RETURNING `+projectSelectCols, id))
+		UPDATE projects SET status=$1, updated_at=now() WHERE id=$2
+		RETURNING `+projectSelectCols, req.Status, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "project not found")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "cancel failed")
+		writeError(w, http.StatusInternalServerError, "status update failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, p)

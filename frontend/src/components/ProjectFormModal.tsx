@@ -1,13 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
-import type { Project, ProjectStatus } from '../types'
+import type { Project } from '../types'
 import { CloseIcon } from './icons'
 
 function toDateInput(iso: string) {
   return iso.slice(0, 10)
 }
-
-const STATUSES: ProjectStatus[] = ['tentative', 'confirmed', 'in_progress', 'completed', 'cancelled']
 
 export function ProjectFormModal({
   project,
@@ -23,7 +21,6 @@ export function ProjectFormModal({
   const [client, setClient] = useState(project?.client ?? '')
   const [startDate, setStartDate] = useState(project ? toDateInput(project.start_date) : '')
   const [endDate, setEndDate] = useState(project ? toDateInput(project.end_date) : '')
-  const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'tentative')
   const [carnetRequired, setCarnetRequired] = useState(project?.carnet_required ?? false)
   const [clientReference, setClientReference] = useState(project?.client_reference ?? '')
   const [orderNumber, setOrderNumber] = useState(project?.order_number ?? '')
@@ -42,7 +39,6 @@ export function ProjectFormModal({
         client: client || null,
         start_date: new Date(startDate).toISOString(),
         end_date: new Date(endDate).toISOString(),
-        status: isEdit ? status : 'tentative',
         carnet_required: carnetRequired,
         client_reference: clientReference || null,
         order_number: orderNumber || null,
@@ -86,23 +82,6 @@ export function ProjectFormModal({
               className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
             />
           </label>
-
-          {isEdit && (
-            <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-              Status
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-                className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
 
           <label className="flex flex-col gap-1.5 text-[13px] font-medium">
             Client

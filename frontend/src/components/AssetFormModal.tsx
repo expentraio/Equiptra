@@ -48,6 +48,14 @@ export function AssetFormModal({
       setError('Asset number is required for non-bulk units')
       return
     }
+    const wasActive = asset?.status !== 'written_off' && asset?.status !== 'sold'
+    const goingInactive = status === 'written_off' || status === 'sold'
+    if (isEdit && wasActive && goingInactive && status !== asset?.status) {
+      const label = STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status
+      if (!confirm(`Mark this asset as ${label}? This is a bigger change than a routine correction — it should reflect an actual write-off/disposal.`)) {
+        return
+      }
+    }
     setSubmitting(true)
     try {
       const body = {

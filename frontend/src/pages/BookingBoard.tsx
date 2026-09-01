@@ -1,11 +1,13 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
-import type { AllocationWithConflicts, BookingRequest, Project } from '../types'
+import type { AllocationWithConflicts, BookingRequest, Project, ProjectStatus, ProjectStatusConflictAsset } from '../types'
 import { AlertTriangleIcon, ChevronLeftIcon, EditIcon, FileIcon, PlusIcon } from '../components/icons'
 import { NewBookingRequestModal } from '../components/NewBookingRequestModal'
 import { AllocationPanel } from '../components/AllocationPanel'
 import { ProjectFormModal } from '../components/ProjectFormModal'
+
+const PROJECT_STATUSES: ProjectStatus[] = ['tentative', 'confirmed', 'in_progress', 'completed', 'cancelled']
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -43,6 +45,12 @@ export function BookingBoard() {
   const [expanded, setExpanded] = useState<number | null>(null)
   const [conflictCount, setConflictCount] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [statusWarning, setStatusWarning] = useState<{
+    target: ProjectStatus
+    message: string
+    assets: ProjectStatusConflictAsset[]
+  } | null>(null)
+  const [changingStatus, setChangingStatus] = useState(false)
   const hasAllocationHistory = requests.some((r) => r.total_allocation_count > 0)
 
   function reload() {
@@ -72,15 +80,27 @@ export function BookingBoard() {
     reload()
   }
 
-  async function cancelProject() {
+  async function changeStatus(target: ProjectStatus, override = false) {
     if (!project) return
-    if (!confirm(`Cancel "${project.name}"? Its status will be set to cancelled.`)) return
     setActionError(null)
+    setChangingStatus(true)
     try {
-      await api.post(`/projects/${project.id}/cancel`)
+      await api.post(`/projects/${project.id}/status`, { status: target, override })
+      setStatusWarning(null)
       reload()
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Could not cancel project')
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.body as { message?: string; assets?: ProjectStatusConflictAsset[] }
+        setStatusWarning({
+          target,
+          message: body.message ?? 'This project still has active allocations.',
+          assets: body.assets ?? [],
+        })
+      } else {
+        setActionError(err instanceof ApiError ? err.message : 'Could not change project status')
+      }
+    } finally {
+      setChangingStatus(false)
     }
   }
 
@@ -113,11 +133,18 @@ export function BookingBoard() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-[21px] font-bold">{project.name}</h1>
-            <span
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${projectStatusPillClass[project.status]}`}
+            <select
+              value={project.status}
+              disabled={changingStatus}
+              onChange={(e) => changeStatus(e.target.value as ProjectStatus)}
+              className={`rounded-full border-none px-2.5 py-1 text-[11px] font-semibold capitalize outline-none disabled:opacity-60 ${projectStatusPillClass[project.status]}`}
             >
-              {project.status.replace('_', ' ')}
-            </span>
+              {PROJECT_STATUSES.map((s) => (
+                <option key={s} value={s} className="bg-surface text-ink">
+                  {s.replace('_', ' ')}
+                </option>
+              ))}
+            </select>
           </div>
           <p className="mt-1 text-[13px] text-ink-soft">
             {formatDateRange(project.start_date, project.end_date)}
@@ -165,22 +192,17 @@ export function BookingBoard() {
 
       <div className="mb-5.5 flex flex-wrap items-center gap-4 border-t border-border pt-3.5">
         <span className="text-[11px] font-semibold uppercase tracking-[.05em] text-ink-soft">Project actions</span>
-        {project.status !== 'cancelled' && (
-          <button onClick={cancelProject} className="text-[12.5px] font-medium text-ink-soft hover:text-red">
-            Cancel project
-          </button>
-        )}
         <button
           onClick={deleteProject}
           disabled={hasAllocationHistory}
-          title={hasAllocationHistory ? 'Cannot delete a project with allocation history — use Cancel instead' : undefined}
+          title={hasAllocationHistory ? 'Cannot delete a project with allocation history — set status to cancelled instead' : undefined}
           className="text-[12.5px] font-medium text-ink-soft hover:text-red disabled:cursor-not-allowed disabled:text-[#C9C5BA] disabled:hover:text-[#C9C5BA]"
         >
           Delete project
         </button>
         {hasAllocationHistory && (
           <span className="text-[12px] text-ink-soft">
-            Can't delete — this project has allocation (checkout/check-in) history. Cancel instead.
+            Can't delete — this project has allocation (checkout/check-in) history. Set status to cancelled instead.
           </span>
         )}
       </div>
@@ -188,6 +210,40 @@ export function BookingBoard() {
       {actionError && (
         <div className="mb-4.5 rounded-control border border-red-fill bg-red-fill px-3.5 py-2.5 text-[13px] font-medium text-red">
           {actionError}
+        </div>
+      )}
+
+      {statusWarning && (
+        <div className="mb-4.5 flex flex-col gap-2.5 rounded-control border border-[#E8C5BE] bg-red-fill px-4 py-3 text-[13px] text-red">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <div className="font-medium">{statusWarning.message}</div>
+              <ul className="mt-1.5 list-disc pl-4">
+                {statusWarning.assets.map((a) => (
+                  <li key={a.asset_id}>
+                    {a.asset_number ? `#${a.asset_number}` : 'Bulk unit'} — {a.product_name} (
+                    {a.allocation_status.replace('_', ' ')})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => changeStatus(statusWarning.target, true)}
+              disabled={changingStatus}
+              className="self-start rounded-control border border-red px-3 py-1 text-[11.5px] font-semibold text-red hover:bg-white disabled:opacity-60"
+            >
+              Change anyway
+            </button>
+            <button
+              onClick={() => setStatusWarning(null)}
+              className="self-start rounded-control px-3 py-1 text-[11.5px] font-semibold text-ink-soft hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

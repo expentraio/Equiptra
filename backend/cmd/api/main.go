@@ -96,12 +96,14 @@ func main() {
 			r.Get("/", api.ListAssets)
 			r.Get("/{id}", api.GetAsset)
 			r.Get("/{id}/history", api.GetAssetHistory)
-			// Same as products above: create/edit open to any authenticated user
-			// for now; delete stays admin-gated.
+			// Unlike products, editing an existing asset covers fields like
+			// asset_number/status that are closer to value-editing than
+			// day-to-day booking — admin-gated, same as delete. Create stays
+			// open to any authenticated user.
 			r.Post("/", api.CreateAsset)
-			r.Put("/{id}", api.UpdateAsset)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAdmin)
+				r.Put("/{id}", api.UpdateAsset)
 				r.Delete("/{id}", api.DeleteAsset)
 			})
 		})
@@ -112,7 +114,7 @@ func main() {
 			r.Get("/{id}", api.GetProject)
 			r.Put("/{id}", api.UpdateProject)
 			r.Delete("/{id}", api.DeleteProject)
-			r.Post("/{id}/cancel", api.CancelProject)
+			r.Post("/{id}/status", api.UpdateProjectStatus)
 			r.Get("/{id}/carnet", api.GetCarnetView)
 			r.Get("/{id}/carnet/export.csv", api.ExportCarnetCSV)
 			r.Get("/{id}/carnet/export.pdf", api.ExportCarnetPDF)

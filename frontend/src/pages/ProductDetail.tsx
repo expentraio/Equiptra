@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 import type { Product, ProductAssetItem } from '../types'
 import { AssetTag } from '../components/AssetTag'
 import { AssetDetailPanel } from '../components/AssetDetailPanel'
@@ -28,6 +29,7 @@ function formatDate(d: string) {
 }
 
 export function ProductDetail() {
+  const { user } = useAuth()
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const highlightAssetId = searchParams.get('highlight')
@@ -162,15 +164,17 @@ export function ProductDetail() {
                     )}
                   </td>
                   <td className="border-b border-border px-4 py-3.25 text-right text-[12px]">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingAsset(asset)
-                      }}
-                      className="font-medium text-ink-soft hover:text-teal"
-                    >
-                      Edit
-                    </button>
+                    {user?.role === 'admin' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingAsset(asset)
+                        }}
+                        className="font-medium text-ink-soft hover:text-teal"
+                      >
+                        Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
               )

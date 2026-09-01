@@ -78,6 +78,13 @@ export interface Project {
   updated_at: string
 }
 
+export interface ProjectStatusConflictAsset {
+  asset_id: number
+  asset_number?: string
+  product_name: string
+  allocation_status: BookingAllocationStatus
+}
+
 export interface BookingRequest {
   id: number
   project_id: number
