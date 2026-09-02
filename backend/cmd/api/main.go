@@ -14,6 +14,7 @@ import (
 	"equiptra/internal/db"
 	"equiptra/internal/handlers"
 	"equiptra/internal/middleware"
+	"equiptra/internal/monday"
 	"equiptra/internal/storage"
 )
 
@@ -31,7 +32,12 @@ func main() {
 		log.Printf("SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY not set — product photo uploads are disabled")
 	}
 
-	api := &handlers.API{DB: pool, Supabase: supabaseClient}
+	mondayClient := monday.NewClient()
+	if mondayClient == nil {
+		log.Printf("MONDAY_API_TOKEN not set — Monday.com project lookup is disabled")
+	}
+
+	api := &handlers.API{DB: pool, Supabase: supabaseClient, Monday: mondayClient}
 
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Logger)
@@ -125,6 +131,12 @@ func main() {
 			r.Get("/{id}/carnet/export.pdf", api.ExportCarnetPDF)
 			r.Get("/{id}/delivery-note", api.GetDeliveryNoteView)
 			r.Get("/{id}/delivery-note/export.pdf", api.ExportDeliveryNotePDF)
+		})
+
+		r.Route("/monday", func(r chi.Router) {
+			// Same access level as project creation — read-only, no reason
+			// to restrict further. See docs/equiptra-monday-lookup-addendum.md.
+			r.Get("/project-lookup", api.MondayProjectLookup)
 		})
 
 		r.Route("/booking-requests", func(r chi.Router) {

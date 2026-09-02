@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
-import type { Project } from '../types'
+import type { MondayProjectLookup, Project } from '../types'
 import { CloseIcon } from './icons'
 
 function toDateInput(iso: string) {
@@ -28,6 +28,33 @@ export function ProjectFormModal({
   const [notes, setNotes] = useState(project?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [mondayError, setMondayError] = useState<string | null>(null)
+  const [mondayFetching, setMondayFetching] = useState(false)
+
+  // Re-fetching on an existing project is out of scope for v1 — see
+  // docs/equiptra-monday-lookup-addendum.md — so the button only appears at
+  // creation time, not when editing.
+  async function fetchFromMonday() {
+    if (!orderNumber.trim()) {
+      setMondayError('Enter an order number first.')
+      return
+    }
+    setMondayFetching(true)
+    setMondayError(null)
+    try {
+      const result = await api.get<MondayProjectLookup>(`/monday/project-lookup?order_number=${encodeURIComponent(orderNumber.trim())}`)
+      setName(result.name)
+      if (result.client) setClient(result.client)
+      if (result.start_date) setStartDate(result.start_date)
+      if (result.end_date) setEndDate(result.end_date)
+      if (result.client_reference) setClientReference(result.client_reference)
+      if (result.delivery_address) setDeliveryAddress(result.delivery_address)
+    } catch (err) {
+      setMondayError(err instanceof ApiError ? err.message : 'Could not reach Monday — enter project details manually')
+    } finally {
+      setMondayFetching(false)
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -131,12 +158,30 @@ export function ProjectFormModal({
               Order number
               <input
                 value={orderNumber}
-                onChange={(e) => setOrderNumber(e.target.value)}
+                onChange={(e) => {
+                  setOrderNumber(e.target.value)
+                  setMondayError(null)
+                }}
                 placeholder="e.g. 536-244"
                 className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
               />
             </label>
           </div>
+          {!isEdit && (
+            <button
+              type="button"
+              onClick={fetchFromMonday}
+              disabled={mondayFetching}
+              className="-mt-1.5 self-start rounded-control border border-border-strong bg-surface px-3.5 py-2 text-[12.5px] font-medium text-teal hover:border-teal disabled:opacity-60"
+            >
+              {mondayFetching ? 'Fetching…' : 'Fetch from Monday'}
+            </button>
+          )}
+          {mondayError && (
+            <div className="-mt-2 rounded-control border border-red-fill bg-red-fill px-3.5 py-2.5 text-[12.5px] font-medium text-red">
+              {mondayError}
+            </div>
+          )}
           <label className="flex flex-col gap-1.5 text-[13px] font-medium">
             Delivery address
             <textarea

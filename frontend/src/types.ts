@@ -82,6 +82,15 @@ export interface Project {
   updated_at: string
 }
 
+export interface MondayProjectLookup {
+  name: string
+  client?: string
+  start_date?: string
+  end_date?: string
+  client_reference?: string
+  delivery_address?: string
+}
+
 export interface ProjectStatusConflictAsset {
   asset_id: number
   asset_number?: string
