@@ -21,13 +21,18 @@ Reference UI mockup: `asset-system-ui-mockup.html` (clickable, all screens sketc
 
 ---
 
-## 2. Brand system (shared with Expentra)
+## 2. Brand system
+
+Neutrals, status colours, type, icon style, and radii are shared across the Simplified Software
+suite. The primary/accent colour is not — each product in the suite is locked to its own distinct
+accent under the v1 brand lock; Equiptra's was provisionally teal (shared with Expentra) and is
+now locked to a distinct steel blue.
 
 | Token | Value |
 |---|---|
-| Teal (primary/action) | `#0EA68A` |
+| Steel blue (primary/action) | `#4F7693` |
 | Navy (ink/text) | `#0F172A` |
-| Mint (light fill/accent bg) | `#E6F4EF` |
+| Light fill (accent bg) | `#E8EEF2` |
 | Slate (secondary text) | `#64748B` |
 | Off White (page bg) | `#F7F8FA` |
 | Font | Inter (400/500/600/700 — no other typefaces) |
@@ -38,7 +43,7 @@ Functional-only colours (not brand, used for status semantics): amber `#B4661A` 
 
 Signature UI element: every asset reference renders as a small dark "tag" chip (asset number in bold tabular Inter, with a small dot/rivet) — echoes a physical asset label. Reuse this treatment anywhere an asset is referenced (tables, cards, detail panels).
 
-Logo lockup: mark (3 stacked teal bars, decreasing width) sits left of "EQUIPTRA" in uppercase, tagline "Equipment management, simplified." below — matches Expentra's own lockup pattern ("Business expenses, simplified.").
+Logo lockup: mark (3 stacked accent-colour bars, decreasing width) sits left of "EQUIPTRA" in uppercase, tagline "Equipment management, simplified." below — matches Expentra's own lockup pattern ("Business expenses, simplified.").
 
 ---
 
